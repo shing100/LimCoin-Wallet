@@ -1,6 +1,14 @@
 const electron = require("electron"),
   path = require("path"),
-  url = require("url");
+  url = require("url"),
+  LimCoin = require("./LimCoin/src/server");
+
+
+const server = LimCoin.app.listen(4000, () => {
+  console.log("running localhost4000");
+});
+
+LimCoin.startP2PServer(server);
 
 const { app, BrowserWindow } = electron;
 
