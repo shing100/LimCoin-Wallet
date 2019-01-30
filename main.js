@@ -1,14 +1,16 @@
 const electron = require("electron"),
   path = require("path"),
   url = require("url"),
+  getPort = require("get-port"),
   LimCoin = require("./LimCoin/src/server");
 
 
-const server = LimCoin.app.listen(4000, () => {
-  console.log("running localhost4000");
+getPort().then(port => {
+  const server = nomadcoin.app.listen(port, () => {
+    console.log(`Running blockchain node on: http://localhost:${port}`);
+  });
+  LimCoin.startP2PServer(server);
 });
-
-LimCoin.startP2PServer(server);
 
 const { app, BrowserWindow } = electron;
 
