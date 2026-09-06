@@ -37,8 +37,32 @@ const Hint = styled.p`
   color: var(--textFaint);
 `;
 
+const Actions = styled.div`
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+`;
+
+const Auto = styled.p`
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--textMuted);
+`;
+
 class MineCard extends Component {
   state = { busy: false, result: null };
+
+  // 블록이 꾸준히 나와야 난이도 조절이 의미를 갖는다.
+  // 손으로 채굴 버튼을 누르는 속도로는 잴 수 없다.
+  _toggleAuto = async () => {
+    this.setState({ busy: true, result: null });
+    try {
+      await this.props.onToggleAuto(!this.props.autoMining);
+      this.setState({ busy: false });
+    } catch (e) {
+      this.setState({ busy: false, result: { tone: "error", text: e.message } });
+    }
+  };
 
   _mine = async () => {
     this.setState({ busy: true, result: null });
@@ -58,7 +82,9 @@ class MineCard extends Component {
   };
 
   render() {
-    const { height, difficulty, mempoolSize, subsidy, pendingFees, disabled } = this.props;
+    const {
+      height, difficulty, mempoolSize, subsidy, pendingFees, autoMining, disabled
+    } = this.props;
     const { busy, result } = this.state;
     return (
       <Card>
@@ -87,9 +113,15 @@ class MineCard extends Component {
               ? `대기 중인 트랜잭션 ${mempoolSize}건이 함께 담기고, 수수료는 채굴자가 가져갑니다.`
               : "대기 중인 트랜잭션이 없습니다. 코인베이스만 담깁니다."}
           </Hint>
-          <Button primary onClick={this._mine} disabled={busy || disabled}>
-            {busy ? "채굴 중…" : "블록 채굴"}
-          </Button>
+          <Actions>
+            <Button primary onClick={this._mine} disabled={busy || disabled || autoMining}>
+              {busy && !autoMining ? "채굴 중…" : "블록 채굴"}
+            </Button>
+            <Button onClick={this._toggleAuto} disabled={busy || disabled}>
+              {autoMining ? "자동 채굴 끄기" : "자동 채굴"}
+            </Button>
+          </Actions>
+          {autoMining && <Auto>자동으로 계속 채굴하는 중입니다.</Auto>}
           {result && <Notice tone={result.tone}>{result.text}</Notice>}
         </CardBody>
       </Card>

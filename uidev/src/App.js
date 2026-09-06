@@ -136,12 +136,16 @@ class App extends Component {
     return block;
   };
 
+  _toggleAuto = async enabled => {
+    await api.setMining(enabled);
+    await this._refresh();
+  };
+
   render() {
     const {
       address, balance, blocks, peers, mempool, info, online, error, loading
     } = this.state;
 
-    const newest = blocks.length > 0 ? blocks[blocks.length - 1] : null;
     const history = buildHistory(blocks, address);
     const pendingFees = sumMempoolFees(blocks, mempool);
 
@@ -162,11 +166,13 @@ class App extends Component {
             <SendForm onSend={this._send} disabled={!online} />
             <MineCard
               onMine={this._mine}
-              height={newest ? newest.index : null}
-              difficulty={newest ? newest.difficulty : null}
+              height={info ? info.height : null}
+              difficulty={info ? info.difficulty : null}
               mempoolSize={mempool.length}
               subsidy={info ? info.currentSubsidy : null}
               pendingFees={pendingFees}
+              autoMining={info ? info.mining : false}
+              onToggleAuto={this._toggleAuto}
               disabled={!online}
             />
           </Right>
