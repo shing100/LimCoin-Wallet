@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import styled from "styled-components";
 import { Card, CardTitle, CardBody, Button, Notice } from "../ui";
+import { formatLim } from "../units";
 
 const Stats = styled.dl`
   display: grid;
@@ -43,9 +44,13 @@ class MineCard extends Component {
     this.setState({ busy: true, result: null });
     try {
       const block = await this.props.onMine();
+      const reward = block.data[0].txOuts[0].amount;
       this.setState({
         busy: false,
-        result: { tone: "ok", text: `블록 #${block.index} 를 채굴했습니다. +10 LIM` }
+        result: {
+          tone: "ok",
+          text: `블록 #${block.index} 를 채굴했습니다. +${formatLim(reward)} LIM`
+        }
       });
     } catch (e) {
       this.setState({ busy: false, result: { tone: "error", text: e.message } });
@@ -53,7 +58,7 @@ class MineCard extends Component {
   };
 
   render() {
-    const { height, difficulty, mempoolSize, disabled } = this.props;
+    const { height, difficulty, mempoolSize, subsidy, pendingFees, disabled } = this.props;
     const { busy, result } = this.state;
     return (
       <Card>
@@ -68,10 +73,18 @@ class MineCard extends Component {
               <Key>난이도</Key>
               <Value>{difficulty === null ? "—" : difficulty}</Value>
             </Stat>
+            <Stat>
+              <Key>블록 보조금</Key>
+              <Value>{subsidy === null ? "—" : formatLim(subsidy)}</Value>
+            </Stat>
+            <Stat>
+              <Key>대기 수수료</Key>
+              <Value>{formatLim(pendingFees)}</Value>
+            </Stat>
           </Stats>
           <Hint>
             {mempoolSize > 0
-              ? `대기 중인 트랜잭션 ${mempoolSize}건이 함께 담깁니다.`
+              ? `대기 중인 트랜잭션 ${mempoolSize}건이 함께 담기고, 수수료는 채굴자가 가져갑니다.`
               : "대기 중인 트랜잭션이 없습니다. 코인베이스만 담깁니다."}
           </Hint>
           <Button primary onClick={this._mine} disabled={busy || disabled}>

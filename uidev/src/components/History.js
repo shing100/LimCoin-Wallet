@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { Card, CardTitle, Mono, Empty } from "../ui";
+import { formatLim } from "../units";
 
 const Wrap = styled(Card)`
   display: flex;
@@ -81,7 +82,7 @@ const LABELS = {
   mined: { text: "채굴 보상", sign: "+", icon: "+" },
   received: { text: "받음", sign: "+", icon: "↓" },
   sent: { text: "보냄", sign: "−", icon: "↑" },
-  self: { text: "본인 이체", sign: "", icon: "↻" }
+  self: { text: "본인 이체", sign: "−", icon: "↻" }
 };
 
 const formatTime = seconds => {
@@ -112,8 +113,8 @@ const History = ({ items, loading }) => (
                 </Meta>
               </Detail>
               <Amount kind={item.kind}>
-                {label.sign}
-                {item.amount} LIM
+                {item.amount === 0 ? "" : label.sign}
+                {formatLim(item.amount)} LIM
               </Amount>
             </Row>
           );

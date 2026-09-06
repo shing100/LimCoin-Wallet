@@ -41,13 +41,15 @@ export const getBalance = () => request("/me/balance");
 export const getBlocks = () => request("/blocks");
 export const getPeers = () => request("/peers");
 export const getMempool = () => request("/transactions");
+export const getInfo = () => request("/info");
 
 export const mineBlock = () => request("/blocks", { method: "POST" });
 
-export const sendCoins = (address, amount) =>
+// amount 와 fee 는 최소 단위(lm) 정수다. 1 LIM = 100,000,000 lm.
+export const sendCoins = (address, amount, fee) =>
   request("/transactions", {
     method: "POST",
-    body: JSON.stringify({ address, amount })
+    body: JSON.stringify({ address, amount, fee })
   });
 
 export const connectPeer = peer =>

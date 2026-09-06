@@ -5,7 +5,7 @@ import BalanceCard from "./components/BalanceCard";
 import SendForm from "./components/SendForm";
 import MineCard from "./components/MineCard";
 import History from "./components/History";
-import { buildHistory } from "./history";
+import { buildHistory, sumMempoolFees } from "./history";
 import { Notice } from "./ui";
 import * as api from "./api";
 
@@ -71,7 +71,8 @@ class App extends Component {
     balance: null,
     blocks: [],
     peers: 0,
-    mempool: 0,
+    mempool: [],
+    info: null,
     online: true,
     error: null,
     loading: true
@@ -90,12 +91,13 @@ class App extends Component {
   _refresh = async () => {
     try {
       // 주소는 노드가 살아 있는 한 바뀌지 않으므로 한 번만 받는다.
-      const [address, balance, blocks, peers, mempool] = await Promise.all([
+      const [address, balance, blocks, peers, mempool, info] = await Promise.all([
         this.state.address || api.getAddress(),
         api.getBalance(),
         api.getBlocks(),
         api.getPeers(),
-        api.getMempool()
+        api.getMempool(),
+        api.getInfo()
       ]);
       if (this.unmounted) {
         return;
@@ -105,7 +107,8 @@ class App extends Component {
         balance: balance.balance,
         blocks,
         peers: peers.length,
-        mempool: mempool.length,
+        mempool,
+        info,
         online: true,
         error: null,
         loading: false
@@ -122,8 +125,8 @@ class App extends Component {
     }
   };
 
-  _send = async (address, amount) => {
-    await api.sendCoins(address, amount);
+  _send = async (address, amount, fee) => {
+    await api.sendCoins(address, amount, fee);
     await this._refresh();
   };
 
@@ -135,11 +138,12 @@ class App extends Component {
 
   render() {
     const {
-      address, balance, blocks, peers, mempool, online, error, loading
+      address, balance, blocks, peers, mempool, info, online, error, loading
     } = this.state;
 
     const newest = blocks.length > 0 ? blocks[blocks.length - 1] : null;
     const history = buildHistory(blocks, address);
+    const pendingFees = sumMempoolFees(blocks, mempool);
 
     return (
       <Shell>
@@ -150,7 +154,7 @@ class App extends Component {
             <BalanceCard
               balance={balance}
               address={address}
-              pending={mempool}
+              pending={mempool.length}
             />
             <History items={history} loading={loading} />
           </Left>
@@ -160,7 +164,9 @@ class App extends Component {
               onMine={this._mine}
               height={newest ? newest.index : null}
               difficulty={newest ? newest.difficulty : null}
-              mempoolSize={mempool}
+              mempoolSize={mempool.length}
+              subsidy={info ? info.currentSubsidy : null}
+              pendingFees={pendingFees}
               disabled={!online}
             />
           </Right>

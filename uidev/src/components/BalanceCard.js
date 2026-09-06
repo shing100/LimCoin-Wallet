@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import styled from "styled-components";
 import { Card, Mono, Button } from "../ui";
+import { formatLim } from "../units";
 import { radius } from "../theme";
 
 const Wrap = styled(Card)`
@@ -99,7 +100,7 @@ class BalanceCard extends Component {
       <Wrap>
         <Caption>잔액</Caption>
         <Amount>
-          {balance === null ? "—" : balance.toLocaleString()}
+          {balance === null ? "—" : formatLim(balance)}
           <Unit>LIM</Unit>
         </Amount>
         {pending > 0 && (
