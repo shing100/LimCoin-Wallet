@@ -1,11 +1,12 @@
 const WebSockets = require('ws'),
   Blockchain = require('./blockchain'),
-  Mempool = require("./mempool");
+  Mempool = require("./memPool");
 
 const { getNewestBlock, isBlockStructureValid, replaceChain, getBlockChain, addBlockToChain, handleIncomingTx } = Blockchain;
 
 const { getMempool } = Mempool;
 const sockets = [];
+const KEEP_ALIVE_INTERVAL = 30000;
 
 // Message Type
 const GET_LATEST = "GET_LATEST";
@@ -53,6 +54,7 @@ const mempoolResponse = data => {
 // 소켓 가져오기
 const getSockets = () => sockets;
 
+// 서버 시작하기
 const startP2PServer = server => {
   const wsServer = new WebSockets.Server({server});
   wsServer.on("connection", ws => {
@@ -70,14 +72,16 @@ const initSocketConnection = ws => {
   handleSocketMessages(ws);
   handleSocketError(ws);
   sendMessage(ws, getLatest());
+  // 새로 붙은 피어에게만 mempool 을 요청한다
   setTimeout(() => {
-    sendMessageToAll(getAllMempool());
+    sendMessage(ws, getAllMempool());
   }, 1000);
-  setInterval(() => {
-    if(sockets.includes(ws)){
-      sendMessage(ws, "");
+  // keepalive. 소켓이 닫히면 handleSocketError 에서 해제한다
+  ws.keepAliveId = setInterval(() => {
+    if (ws.readyState === WebSockets.OPEN) {
+      ws.ping();
     }
-  }, 1000);
+  }, KEEP_ALIVE_INTERVAL);
 };
 
 // 데이터 JSON 변환
@@ -116,7 +120,7 @@ const handleSocketMessages = ws => {
         break;
       case MEMPOOL_RESPONSE:
         const receivedTxs = message.data;
-        if(receivedTxs === null){
+        if(!(receivedTxs instanceof Array)){
           return;
         }
         receivedTxs.forEach(tx => {
@@ -145,6 +149,7 @@ const handleBlockchainResponse = receivedBlocks => {
     return;
   }
   const newestBlock = getNewestBlock();
+  // 가져온 블록과 기존 블록 비교
   if(latestBlockReceived.index > newestBlock.index){
     if(newestBlock.hash === latestBlockReceived.previousHash){
       if(addBlockToChain(latestBlockReceived)) {
@@ -159,9 +164,18 @@ const handleBlockchainResponse = receivedBlocks => {
 };
 
 // JSON 메세지 보내기 to WS
-const sendMessage = (ws, message) => ws.send(JSON.stringify(message));
+const sendMessage = (ws, message) => {
+  if (ws.readyState !== WebSockets.OPEN) {
+    return;
+  }
+  try {
+    ws.send(JSON.stringify(message));
+  } catch (e) {
+    console.log(`Failed to send a message to a peer: ${e.message}`);
+  }
+};
 // 모두에게 보내기
-const sendMessageToAll = message => sockets.forEach(ws => sendMessage(ws, message));
+const sendMessageToAll = message => [...sockets].forEach(ws => sendMessage(ws, message));
 // 최근 블록체인 가져오기
 const responseLatest = () => blockchainResponse([getNewestBlock()]);
 // 모든 블록체인 가져오기
@@ -174,8 +188,12 @@ const broadcastMempool = () => sendMessageToAll(returnMempool());
 // 에러 체크
 const handleSocketError = ws => {
   const closeSocketConnetion = ws => {
+    clearInterval(ws.keepAliveId);
     ws.close();
-    sockets.splice(sockets.indexOf(ws),1);
+    const index = sockets.indexOf(ws);
+    if (index !== -1) {
+      sockets.splice(index, 1);
+    }
   };
   ws.on("error", () => closeSocketConnetion(ws));
   ws.on("close", () => closeSocketConnetion(ws));
@@ -190,9 +208,17 @@ const connectToPeers = newPeer => {
   ws.on("close", () => console.log("Connection closed"));
 };
 
+// 연결된 피어 주소 목록
+const getPeers = () =>
+  sockets.map(ws => {
+    const socket = ws._socket;
+    return socket ? `${socket.remoteAddress}:${socket.remotePort}` : "unknown";
+  });
+
 module.exports = {
   startP2PServer,
   connectToPeers,
+  getPeers,
   broadcastNewBlock,
   broadcastMempool
 };

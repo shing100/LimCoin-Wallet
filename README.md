@@ -1,2 +1,57 @@
 # LimCoin Wallet
-Make Electron Windows, Linux and Mac OS Wellet Desktop App for LimCoin
+
+LimCoin 용 Electron 데스크톱 지갑 (Windows / Linux / macOS).
+
+Electron 메인 프로세스가 LimCoin 노드를 빈 포트에 직접 띄우고,
+React 렌더러가 `global.sharedPort` 로 그 포트를 읽어 붙는다.
+
+## 시작하기
+
+```bash
+yarn install
+cd uidev && yarn install && cd ..
+
+yarn dev          # React 개발서버 + Electron 을 같이 띄운다
+```
+
+따로 띄우려면:
+
+```bash
+yarn startReact   # http://localhost:3000
+yarn start        # ENV=dev 로 Electron 실행
+```
+
+배포용 빌드:
+
+```bash
+yarn build        # uidev/build 생성
+yarn start:prod   # 빌드된 파일을 로드
+```
+
+테스트:
+
+```bash
+yarn test         # LimCoin 노드의 검증 로직 테스트
+```
+
+## 개인키
+
+노드 지갑의 개인키는 `LimCoin/src/privateKey` 에 저장되며 첫 실행 시 자동 생성된다.
+**`.gitignore` 대상이고 절대 커밋하면 안 된다.**
+
+> 과거 버전은 제네시스 주소의 개인키를 저장소에 함께 커밋했다.
+> 그 주소는 폐기되었고 해당 키는 더 이상 사용해서는 안 된다.
+
+## `LimCoin/` 디렉터리에 대하여
+
+`LimCoin/` 은 [shing100/LimCoin](https://github.com/shing100/LimCoin) 의
+소스를 그대로 복사해 둔 것이다(서브모듈이 아니다).
+
+이 때문에 원본과 조용히 어긋난다 — 실제로 한동안 원본보다 오래된 스냅샷이
+들어 있었다. 원본이 바뀌면 `LimCoin/src`, `LimCoin/scripts`,
+`LimCoin/test`, `LimCoin/package.json` 을 직접 맞춰 줘야 한다.
+
+같은 체인에 붙으려면 **`LimCoin/src/genesis.json` 이 접속하려는 노드와
+동일해야 한다.**
+
+> TODO: git submodule 이나 `file:` 의존성으로 바꿔서 복사본을 없앨 것.

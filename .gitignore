@@ -61,3 +61,13 @@ build
 
 # next.js build output
 .next
+
+# 지갑 개인키 — 절대 커밋하지 말 것
+LimCoin/src/privateKey
+
+# Electron 빌드 산출물
+dist/
+uidev/build/
+
+# 이 프로젝트는 yarn 을 쓴다. 락파일이 두 개면 서로 어긋난다.
+package-lock.json
