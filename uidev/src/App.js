@@ -5,6 +5,7 @@ import BalanceCard from "./components/BalanceCard";
 import SendForm from "./components/SendForm";
 import MineCard from "./components/MineCard";
 import History from "./components/History";
+import Backup from "./components/Backup";
 import { mergeHistory } from "./history";
 import { Notice } from "./ui";
 import * as api from "./api";
@@ -192,6 +193,7 @@ class App extends Component {
               onToggleAuto={this._toggleAuto}
               disabled={!online}
             />
+            <Backup disabled={!online} />
           </Right>
         </Main>
       </Shell>
