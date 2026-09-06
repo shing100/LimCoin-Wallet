@@ -65,14 +65,70 @@ const AddressText = styled(Mono)`
   white-space: nowrap;
 `;
 
-const CopyButton = styled(Button)`
+const SmallButton = styled(Button)`
   flex: none;
   padding: 6px 12px;
   font-size: 12px;
 `;
 
+const Footer = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+`;
+
+const Toggle = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--textMuted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  &:hover { color: var(--accent); }
+`;
+
+const AddressList = styled.ul`
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: ${radius.sm};
+`;
+
+const AddressItem = styled.li`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  &:last-child { border-bottom: none; }
+`;
+
+const ItemAddress = styled(Mono)`
+  flex: 1;
+  min-width: 0;
+  color: var(--textFaint);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const ItemAmount = styled.span`
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${props => (props.zero ? "var(--textFaint)" : "var(--text)")};
+`;
+
 class BalanceCard extends Component {
-  state = { copied: false };
+  state = { copied: false, expanded: false, busy: false };
 
   componentWillUnmount() {
     clearTimeout(this.timer);
@@ -80,22 +136,29 @@ class BalanceCard extends Component {
 
   _copy = () => {
     const { address } = this.props;
-    if (!address) {
+    if (!address || !navigator.clipboard) {
       return;
     }
-    // Electron 렌더러에도 표준 클립보드 API 가 있다.
-    const done = () => {
+    navigator.clipboard.writeText(address).then(() => {
       this.setState({ copied: true });
       clearTimeout(this.timer);
       this.timer = setTimeout(() => this.setState({ copied: false }), 1600);
-    };
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(address).then(done, () => {});
+    }, () => {});
+  };
+
+  _newAddress = async () => {
+    this.setState({ busy: true });
+    try {
+      await this.props.onNewAddress();
+    } finally {
+      this.setState({ busy: false });
     }
   };
 
   render() {
-    const { balance, address, pending } = this.props;
+    const { balance, address, addresses, pending, disabled } = this.props;
+    const { copied, expanded, busy } = this.state;
+
     return (
       <Wrap>
         <Caption>잔액</Caption>
@@ -106,14 +169,41 @@ class BalanceCard extends Component {
         {pending > 0 && (
           <Pending>전송 대기 중인 트랜잭션 {pending}건</Pending>
         )}
+
         <AddressRow>
           <AddressText title={address || ""}>
             {address || "주소를 불러오는 중…"}
           </AddressText>
-          <CopyButton onClick={this._copy} disabled={!address}>
-            {this.state.copied ? "복사됨" : "주소 복사"}
-          </CopyButton>
+          <SmallButton onClick={this._copy} disabled={!address}>
+            {copied ? "복사됨" : "주소 복사"}
+          </SmallButton>
         </AddressRow>
+
+        <Footer>
+          {/*
+            거스름돈을 새 주소로 받으므로 지갑은 주소를 여럿 갖게 된다.
+            "내 주소"가 하나뿐이라는 전제가 더는 성립하지 않는다.
+          */}
+          <Toggle onClick={() => this.setState({ expanded: !expanded })}>
+            주소 {addresses.length}개 {expanded ? "접기" : "보기"}
+          </Toggle>
+          <SmallButton onClick={this._newAddress} disabled={busy || disabled}>
+            {busy ? "만드는 중…" : "새 주소"}
+          </SmallButton>
+        </Footer>
+
+        {expanded && (
+          <AddressList>
+            {addresses.map(entry => (
+              <AddressItem key={entry.address}>
+                <ItemAddress title={entry.address}>{entry.address}</ItemAddress>
+                <ItemAmount zero={entry.balance === 0}>
+                  {formatLim(entry.balance)}
+                </ItemAmount>
+              </AddressItem>
+            ))}
+          </AddressList>
+        )}
       </Wrap>
     );
   }

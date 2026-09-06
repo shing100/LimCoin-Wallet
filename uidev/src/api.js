@@ -62,15 +62,18 @@ export const getAddress = async () => {
 };
 
 export const getBalance = () => request("/me/balance");
-/*
- * 노드는 최신순으로 한 페이지씩 준다(기본 50개). 지갑은 내역을 만들려고
- * 블록을 훑어야 하므로 노드가 허용하는 최대치를 달라고 한다.
- * 그보다 오래된 내역은 여기서 볼 수 없다 — 노드에 주소별 색인이 생기면
- * 그때 제대로 고칠 자리다.
- */
-export const HISTORY_DEPTH = 500;
+export const getAddresses = () => request("/me/addresses");
 
-export const getBlocks = () => request(`/blocks?limit=${HISTORY_DEPTH}`);
+export const createAddress = () => request("/me/address", { method: "POST" });
+
+/*
+ * 주소의 트랜잭션 내역.
+ *
+ * 예전에는 블록을 500개씩 받아다 여기서 훑었다. 그래서 내역이 "최근
+ * 500블록"으로 잘렸다. 이제 노드가 주소별로 색인해 두므로 그대로 받는다.
+ */
+export const getAddressTransactions = (address, limit = 50) =>
+  request(`/address/${address}/transactions?limit=${limit}`);
 export const getPeers = () => request("/peers");
 export const getMempool = () => request("/transactions");
 export const getInfo = () => request("/info");
