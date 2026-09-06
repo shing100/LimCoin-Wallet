@@ -30,7 +30,7 @@ const classify = entry => {
   return { kind: "received", amount: received - spent };
 };
 
-export const mergeHistory = perAddress => {
+export const mergeHistory = (perAddress, pending = []) => {
   const byTx = new Map();
 
   for (const entries of perAddress) {
@@ -50,23 +50,30 @@ export const mergeHistory = perAddress => {
     }
   }
 
-  return Array.from(byTx.values())
+  const confirmed = Array.from(byTx.values())
     .map(entry => ({
       id: entry.txId,
       blockIndex: entry.blockIndex,
       timestamp: entry.timestamp,
+      pending: false,
       ...classify(entry)
     }))
     .sort((a, b) => b.blockIndex - a.blockIndex);
-};
 
-// mempool 에 쌓인 수수료 합. 다음 블록을 채굴하면 채굴자가 가져갈 금액이다.
-export const sumMempoolFees = (mempool, utxoByOutpoint) =>
-  mempool.reduce((total, tx) => {
-    const inputs = tx.txIns.reduce((sum, txIn) => {
-      const source = utxoByOutpoint.get(`${txIn.txOutId}:${txIn.txOutIndex}`);
-      return source ? sum + source.amount : sum;
-    }, 0);
-    const outputs = tx.txOuts.reduce((sum, txOut) => sum + txOut.amount, 0);
-    return total + Math.max(0, inputs - outputs);
-  }, 0);
+  /*
+   * 아직 담기지 않은 것은 위에 붙인다.
+   *
+   * 노드가 /me/pending 으로 색인과 같은 모양으로 내주므로 classify 를
+   * 그대로 쓴다. 블록이 없으니 높이도 시각도 없다.
+   */
+  const waiting = pending.map(entry => ({
+    id: entry.txId,
+    blockIndex: null,
+    timestamp: null,
+    pending: true,
+    fee: entry.fee,
+    ...classify(entry)
+  }));
+
+  return [...waiting, ...confirmed];
+};

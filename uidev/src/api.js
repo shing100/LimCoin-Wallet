@@ -36,7 +36,17 @@ export const API_URL = `http://localhost:${PORT}`;
 const WALLET_TOKEN = resolveToken();
 
 const request = async (path, options) => {
-  const headers = { "Content-Type": "application/json" };
+  /*
+   * 본문이 있을 때만 Content-Type 을 붙인다.
+   *
+   * 단순 GET 에도 붙이면 브라우저가 프리플라이트(OPTIONS)를 먼저 보낸다.
+   * 요청이 두 배가 되고, 읽기 전용 엔드포인트가 GET 만 열어 둔 경우에는
+   * 그 프리플라이트가 막혀 읽기까지 실패한다.
+   */
+  const headers = {};
+  if (options && options.body) {
+    headers["Content-Type"] = "application/json";
+  }
   if (WALLET_TOKEN) {
     headers.Authorization = `Bearer ${WALLET_TOKEN}`;
   }
@@ -61,7 +71,16 @@ export const getAddress = async () => {
   return res.text();
 };
 
+// { balance: 확정 잔액, spendable: mempool 까지 반영해 지금 보낼 수 있는 금액 }
 export const getBalance = () => request("/me/balance");
+
+/*
+ * 아직 블록에 담기지 않은, 내 지갑이 얽힌 트랜잭션.
+ *
+ * "얼마를 썼는가"는 입력이 가리키는 이전 출력을 되짚어야 알 수 있고
+ * 그건 UTxOut 집합을 가진 노드만 할 수 있다. 그래서 노드가 계산해 준다.
+ */
+export const getPending = () => request("/me/pending");
 export const getAddresses = () => request("/me/addresses");
 
 // 백업용 니모닉. 이 단어들만 있으면 지갑을 통째로 되살릴 수 있다.
