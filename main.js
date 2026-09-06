@@ -19,9 +19,13 @@ const startBlockchainNode = async () => {
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
-    resizable: false
+    width: 1040,
+    height: 720,
+    minWidth: 720,
+    minHeight: 560,
+    // 첫 페인트까지 흰 화면이 번쩍이는 것을 막는다
+    backgroundColor: "#0d1117",
+    title: "LimCoin Wallet"
   });
 
   if (process.env.ENV === "dev") {
