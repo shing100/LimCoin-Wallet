@@ -12,9 +12,27 @@ let blockchainServer = null;
 // 빈 포트를 하나 잡아 블록체인 노드를 띄우고, 렌더러가 읽을 수 있게 공유한다.
 const startBlockchainNode = async () => {
   const port = await getPort();
-  blockchainServer = LimCoin.start(port);
+
+  /*
+   * 체인은 앱 데이터 폴더에 저장한다.
+   *
+   * 포트는 뜰 때마다 달라지므로(getPort) 포트별 기본 경로를 쓰면 재시작할
+   * 때마다 새 체인이 된다. 지갑은 같은 체인을 계속 이어 가야 한다.
+   */
+  const dataDir = path.join(app.getPath("userData"), "chain");
+
+  blockchainServer = LimCoin.start(port, { dataDir });
   global.sharedPort = port;
+
+  /*
+   * 노드의 지갑 API 는 토큰을 요구한다(포트에 닿는 아무나 코인을 빼가지
+   * 못하게). 우리는 그 노드를 같은 프로세스에서 띄웠으므로 토큰을 알고
+   * 있고, 렌더러에 넘겨준다. 토큰은 이 프로세스 밖으로 나가지 않는다.
+   */
+  global.sharedWalletToken = LimCoin.WALLET_TOKEN;
+
   console.log(`Running blockchain node on: http://localhost:${port}`);
+  console.log(`Chain data: ${dataDir}`);
 };
 
 const createWindow = () => {

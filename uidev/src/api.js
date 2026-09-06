@@ -3,28 +3,46 @@
 // Electron 안에서는 메인 프로세스가 빈 포트를 잡아 global.sharedPort 로 넘겨준다.
 // 브라우저에서 `yarn startReact` 로만 띄우는 경우에는 Electron 이 없으므로
 // REACT_APP_NODE_PORT 또는 3000 으로 떨어진다.
-const resolvePort = () => {
+const fromMain = key => {
   try {
     if (typeof window !== "undefined" && window.require) {
       const { remote } = window.require("electron");
-      const shared = remote.getGlobal("sharedPort");
-      if (shared) {
-        return shared;
-      }
+      return remote.getGlobal(key);
     }
   } catch (e) {
-    // Electron 밖에서 실행 중. 아래 기본값을 쓴다.
+    // Electron 밖에서 실행 중
   }
-  return process.env.REACT_APP_NODE_PORT || 3000;
+  return undefined;
 };
+
+const resolvePort = () =>
+  fromMain("sharedPort") || process.env.REACT_APP_NODE_PORT || 3000;
+
+/*
+ * 노드의 지갑 API 는 토큰을 요구한다. 메인 프로세스가 노드를 띄우면서
+ * 토큰을 넘겨준다. 브라우저로만 띄운 경우에는 REACT_APP_WALLET_TOKEN 을
+ * 쓰거나, 노드를 LIMCOIN_WALLET_TOKEN=none 으로 띄운다.
+ */
+const resolveToken = () =>
+  fromMain("sharedWalletToken") ||
+  // 브라우저로 띄워 시험할 때 콘솔에서 넣어 줄 수 있게 열어 둔다
+  (typeof window !== "undefined" && window.LIMCOIN_WALLET_TOKEN) ||
+  process.env.REACT_APP_WALLET_TOKEN ||
+  "";
 
 export const PORT = resolvePort();
 export const API_URL = `http://localhost:${PORT}`;
 
+const WALLET_TOKEN = resolveToken();
+
 const request = async (path, options) => {
+  const headers = { "Content-Type": "application/json" };
+  if (WALLET_TOKEN) {
+    headers.Authorization = `Bearer ${WALLET_TOKEN}`;
+  }
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options
+    ...options,
+    headers: { ...headers, ...((options && options.headers) || {}) }
   });
   const text = await res.text();
   if (!res.ok) {
@@ -34,11 +52,25 @@ const request = async (path, options) => {
   return text ? JSON.parse(text) : null;
 };
 
-export const getAddress = () =>
-  fetch(`${API_URL}/me/address`).then(res => res.text());
+export const getAddress = async () => {
+  const headers = WALLET_TOKEN ? { Authorization: `Bearer ${WALLET_TOKEN}` } : {};
+  const res = await fetch(`${API_URL}/me/address`, { headers });
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+  return res.text();
+};
 
 export const getBalance = () => request("/me/balance");
-export const getBlocks = () => request("/blocks");
+/*
+ * 노드는 최신순으로 한 페이지씩 준다(기본 50개). 지갑은 내역을 만들려고
+ * 블록을 훑어야 하므로 노드가 허용하는 최대치를 달라고 한다.
+ * 그보다 오래된 내역은 여기서 볼 수 없다 — 노드에 주소별 색인이 생기면
+ * 그때 제대로 고칠 자리다.
+ */
+export const HISTORY_DEPTH = 500;
+
+export const getBlocks = () => request(`/blocks?limit=${HISTORY_DEPTH}`);
 export const getPeers = () => request("/peers");
 export const getMempool = () => request("/transactions");
 export const getInfo = () => request("/info");
@@ -54,3 +86,8 @@ export const sendCoins = (address, amount, fee) =>
 
 export const connectPeer = peer =>
   request("/peers", { method: "POST", body: JSON.stringify({ peer }) });
+
+export const getMining = () => request("/mining");
+
+export const setMining = enabled =>
+  request("/mining", { method: "POST", body: JSON.stringify({ enabled }) });
