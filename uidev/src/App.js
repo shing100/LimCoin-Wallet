@@ -5,7 +5,7 @@ import BalanceCard from "./components/BalanceCard";
 import SendForm from "./components/SendForm";
 import MineCard from "./components/MineCard";
 import History from "./components/History";
-import { buildHistory, sumMempoolFees } from "./history";
+import { mergeHistory } from "./history";
 import { Notice } from "./ui";
 import * as api from "./api";
 
@@ -27,7 +27,6 @@ const Main = styled.main`
   padding: 18px 22px 22px;
   overflow-y: auto;
 
-  /* 창을 좁히면 한 줄로 */
   @media (max-width: 780px) {
     grid-template-columns: 1fr;
     grid-template-rows: none;
@@ -67,11 +66,12 @@ const OfflineNotice = styled(Notice)`
 
 class App extends Component {
   state = {
-    address: null,
+    addresses: [],
+    receiveAddress: null,
     balance: null,
-    blocks: [],
+    history: [],
     peers: 0,
-    mempool: [],
+    mempool: 0,
     info: null,
     online: true,
     error: null,
@@ -90,24 +90,35 @@ class App extends Component {
 
   _refresh = async () => {
     try {
-      // 주소는 노드가 살아 있는 한 바뀌지 않으므로 한 번만 받는다.
-      const [address, balance, blocks, peers, mempool, info] = await Promise.all([
-        this.state.address || api.getAddress(),
-        api.getBalance(),
-        api.getBlocks(),
-        api.getPeers(),
-        api.getMempool(),
-        api.getInfo()
-      ]);
+      const [receiveAddress, balance, addresses, peers, mempool, info] =
+        await Promise.all([
+          api.getAddress(),
+          api.getBalance(),
+          api.getAddresses(),
+          api.getPeers(),
+          api.getMempool(),
+          api.getInfo()
+        ]);
+
+      /*
+       * 내역은 노드의 주소별 색인에서 받는다. 지갑이 주소를 여럿 갖게
+       * 되었으므로 주소마다 받아서 합친다 — 한 트랜잭션이 보낸 주소와
+       * 거스름돈 주소를 함께 건드릴 수 있다.
+       */
+      const perAddress = await Promise.all(
+        addresses.map(entry => api.getAddressTransactions(entry.address))
+      );
+
       if (this.unmounted) {
         return;
       }
       this.setState({
-        address,
+        receiveAddress,
         balance: balance.balance,
-        blocks,
+        addresses,
+        history: mergeHistory(perAddress),
         peers: peers.length,
-        mempool,
+        mempool: mempool.length,
         info,
         online: true,
         error: null,
@@ -141,13 +152,16 @@ class App extends Component {
     await this._refresh();
   };
 
+  _newAddress = async () => {
+    await api.createAddress();
+    await this._refresh();
+  };
+
   render() {
     const {
-      address, balance, blocks, peers, mempool, info, online, error, loading
+      receiveAddress, addresses, balance, history, peers, mempool, info,
+      online, error, loading
     } = this.state;
-
-    const history = buildHistory(blocks, address);
-    const pendingFees = sumMempoolFees(blocks, mempool);
 
     return (
       <Shell>
@@ -157,8 +171,11 @@ class App extends Component {
           <Left>
             <BalanceCard
               balance={balance}
-              address={address}
-              pending={mempool.length}
+              address={receiveAddress}
+              addresses={addresses}
+              pending={mempool}
+              onNewAddress={this._newAddress}
+              disabled={!online}
             />
             <History items={history} loading={loading} />
           </Left>
@@ -168,9 +185,9 @@ class App extends Component {
               onMine={this._mine}
               height={info ? info.height : null}
               difficulty={info ? info.difficulty : null}
-              mempoolSize={mempool.length}
+              mempoolSize={mempool}
               subsidy={info ? info.currentSubsidy : null}
-              pendingFees={pendingFees}
+              pendingFees={info ? info.mempoolFees : 0}
               autoMining={info ? info.mining : false}
               onToggleAuto={this._toggleAuto}
               disabled={!online}

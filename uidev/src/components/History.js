@@ -104,7 +104,7 @@ const History = ({ items, loading }) => (
         {items.map(item => {
           const label = LABELS[item.kind];
           return (
-            <Row key={`${item.id}-${item.blockIndex}`}>
+            <Row key={item.id}>
               <Icon kind={item.kind}>{label.icon}</Icon>
               <Detail>
                 <Kind>{label.text}</Kind>
