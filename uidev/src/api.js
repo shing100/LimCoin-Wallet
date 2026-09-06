@@ -64,6 +64,9 @@ export const getAddress = async () => {
 export const getBalance = () => request("/me/balance");
 export const getAddresses = () => request("/me/addresses");
 
+// 백업용 니모닉. 이 단어들만 있으면 지갑을 통째로 되살릴 수 있다.
+export const getMnemonic = () => request("/me/mnemonic");
+
 export const createAddress = () => request("/me/address", { method: "POST" });
 
 /*
