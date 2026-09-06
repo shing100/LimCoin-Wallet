@@ -156,8 +156,15 @@ class BalanceCard extends Component {
   };
 
   render() {
-    const { balance, address, addresses, pending, disabled } = this.props;
+    const { balance, spendable, address, addresses, pending, disabled } = this.props;
     const { copied, expanded, busy } = this.state;
+
+    /*
+     * 이미 보냈지만 아직 블록에 담기지 않은 것이 있으면 확정 잔액과
+     * 실제로 쓸 수 있는 금액이 다르다. 확정 잔액만 보여 주면 이미
+     * 남에게 간 코인이 아직 있는 것처럼 보인다.
+     */
+    const held = spendable !== null && spendable !== undefined && spendable !== balance;
 
     return (
       <Wrap>
@@ -166,7 +173,13 @@ class BalanceCard extends Component {
           {balance === null ? "—" : formatLim(balance)}
           <Unit>LIM</Unit>
         </Amount>
-        {pending > 0 && (
+        {held && (
+          <Pending>
+            지금 보낼 수 있는 금액 <strong>{formatLim(spendable)} LIM</strong>
+            {" · 나머지는 전송 대기 중입니다"}
+          </Pending>
+        )}
+        {!held && pending > 0 && (
           <Pending>전송 대기 중인 트랜잭션 {pending}건</Pending>
         )}
 

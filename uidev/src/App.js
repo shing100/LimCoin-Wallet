@@ -70,6 +70,7 @@ class App extends Component {
     addresses: [],
     receiveAddress: null,
     balance: null,
+    spendable: null,
     history: [],
     peers: 0,
     mempool: 0,
@@ -91,14 +92,15 @@ class App extends Component {
 
   _refresh = async () => {
     try {
-      const [receiveAddress, balance, addresses, peers, mempool, info] =
+      const [receiveAddress, balance, addresses, peers, mempool, info, pending] =
         await Promise.all([
           api.getAddress(),
           api.getBalance(),
           api.getAddresses(),
           api.getPeers(),
           api.getMempool(),
-          api.getInfo()
+          api.getInfo(),
+          api.getPending()
         ]);
 
       /*
@@ -116,8 +118,10 @@ class App extends Component {
       this.setState({
         receiveAddress,
         balance: balance.balance,
+        // 이미 보낸 것까지 반영한, 지금 실제로 쓸 수 있는 금액
+        spendable: balance.spendable,
         addresses,
-        history: mergeHistory(perAddress),
+        history: mergeHistory(perAddress, pending),
         peers: peers.length,
         mempool: mempool.length,
         info,
@@ -160,8 +164,8 @@ class App extends Component {
 
   render() {
     const {
-      receiveAddress, addresses, balance, history, peers, mempool, info,
-      online, error, loading
+      receiveAddress, addresses, balance, spendable, history, peers, mempool,
+      info, online, error, loading
     } = this.state;
 
     return (
@@ -172,13 +176,18 @@ class App extends Component {
           <Left>
             <BalanceCard
               balance={balance}
+              spendable={spendable}
               address={receiveAddress}
               addresses={addresses}
               pending={mempool}
               onNewAddress={this._newAddress}
               disabled={!online}
             />
-            <History items={history} loading={loading} />
+            <History
+              items={history}
+              loading={loading}
+              height={info ? info.height : null}
+            />
           </Left>
           <Right>
             <SendForm onSend={this._send} disabled={!online} />
