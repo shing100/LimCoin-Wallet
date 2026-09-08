@@ -195,7 +195,12 @@ class App extends Component {
             />
           </Left>
           <Right>
-            <SendForm onSend={this._send} disabled={!online} />
+            <SendForm
+              onSend={this._send}
+              disabled={!online}
+              recommendedFee={info ? info.recommendedFeePerInput : null}
+              congested={info ? info.mempoolSize >= info.maxTxsPerBlock - 1 : false}
+            />
             <MineCard
               onMine={this._mine}
               height={info ? info.height : null}

@@ -33,19 +33,53 @@ const Hint = styled.span`
   color: var(--textFaint);
 `;
 
+const Recommend = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+`;
+
 const initialState = {
   address: "",
   amount: "",
-  fee: "0.001",
+  fee: "",
+  feeTouched: false,
   busy: false,
   result: null
 };
 
+/*
+ * 수수료 기본값은 노드가 권한 값이다.
+ *
+ * 예전에는 0.001 LIM 고정이었다. mempool 이 비어 있으면 그것도 과하고,
+ * 붐비면 그걸로는 담기지 않는다. 노드가 지금 mempool 을 보고 입력 하나당
+ * 얼마면 다음 블록에 담기는지 알려 주므로(/info 의 recommendedFeePerInput)
+ * 그것을 채워 둔다. 사람이 고치기 전까지만 따라간다.
+ */
 class SendForm extends Component {
   state = { ...initialState };
 
+  _recommended = () => {
+    const { recommendedFee } = this.props;
+    return typeof recommendedFee === "number" ? formatLim(recommendedFee) : "0.001";
+  };
+
+  // 사람이 손대기 전에는 권장값을 따라간다
+  _fee = () => (this.state.feeTouched ? this.state.fee : this._recommended());
+
+  _useRecommended = () => this.setState({ fee: "", feeTouched: false, result: null });
+
   _change = key => event =>
-    this.setState({ [key]: event.target.value, result: null });
+    this.setState({
+      [key]: event.target.value,
+      result: null,
+      ...(key === "fee" ? { feeTouched: true } : {})
+    });
 
   // 화면에서는 LIM 으로 받고, 노드에는 최소 단위 정수로 보낸다.
   _parsed = () => {
@@ -57,7 +91,7 @@ class SendForm extends Component {
     if (amount <= 0) {
       throw new Error("금액은 0보다 커야 합니다.");
     }
-    const fee = parseLim(this.state.fee || "0");
+    const fee = parseLim(this._fee() || "0");
     return { address, amount, fee };
   };
 
@@ -98,9 +132,10 @@ class SendForm extends Component {
   };
 
   render() {
-    const { address, amount, fee, busy, result } = this.state;
+    const { address, amount, feeTouched, busy, result } = this.state;
+    const fee = this._fee();
     const total = this._total();
-    const { disabled } = this.props;
+    const { disabled, congested } = this.props;
     return (
       <Card>
         <CardTitle>보내기</CardTitle>
@@ -133,7 +168,18 @@ class SendForm extends Component {
               </div>
               <div>
                 <Label htmlFor="send-fee">
-                  수수료 <Hint>(채굴자에게)</Hint>
+                  수수료{" "}
+                  <Hint>
+                    {feeTouched ? (
+                      <Recommend type="button" onClick={this._useRecommended}>
+                        권장 {this._recommended()} 으로
+                      </Recommend>
+                    ) : congested ? (
+                      "(붐빔 · 권장값)"
+                    ) : (
+                      "(권장값)"
+                    )}
+                  </Hint>
                 </Label>
                 <Input
                   id="send-fee"
