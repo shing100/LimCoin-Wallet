@@ -156,7 +156,9 @@ class BalanceCard extends Component {
   };
 
   render() {
-    const { balance, spendable, address, addresses, pending, disabled } = this.props;
+    const {
+      balance, spendable, immature, address, addresses, pending, disabled
+    } = this.props;
     const { copied, expanded, busy } = this.state;
 
     /*
@@ -176,7 +178,9 @@ class BalanceCard extends Component {
         {held && (
           <Pending>
             지금 보낼 수 있는 금액 <strong>{formatLim(spendable)} LIM</strong>
-            {" · 나머지는 전송 대기 중입니다"}
+            {immature > 0
+              ? ` · 채굴 보상 ${formatLim(immature)} LIM 은 아직 묻히는 중입니다`
+              : " · 나머지는 전송 대기 중입니다"}
           </Pending>
         )}
         {!held && pending > 0 && (

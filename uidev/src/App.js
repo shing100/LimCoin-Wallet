@@ -71,6 +71,7 @@ class App extends Component {
     receiveAddress: null,
     balance: null,
     spendable: null,
+    immature: null,
     history: [],
     peers: 0,
     mempool: 0,
@@ -120,6 +121,8 @@ class App extends Component {
         balance: balance.balance,
         // 이미 보낸 것까지 반영한, 지금 실제로 쓸 수 있는 금액
         spendable: balance.spendable,
+        // 아직 묻히지 않아 쓸 수 없는 채굴 보상
+        immature: balance.immature,
         addresses,
         history: mergeHistory(perAddress, pending),
         peers: peers.length,
@@ -164,8 +167,8 @@ class App extends Component {
 
   render() {
     const {
-      receiveAddress, addresses, balance, spendable, history, peers, mempool,
-      info, online, error, loading
+      receiveAddress, addresses, balance, spendable, immature, history, peers,
+      mempool, info, online, error, loading
     } = this.state;
 
     return (
@@ -177,6 +180,7 @@ class App extends Component {
             <BalanceCard
               balance={balance}
               spendable={spendable}
+              immature={immature}
               address={receiveAddress}
               addresses={addresses}
               pending={mempool}
@@ -187,6 +191,7 @@ class App extends Component {
               items={history}
               loading={loading}
               height={info ? info.height : null}
+              coinbaseMaturity={info ? info.coinbaseMaturity : null}
             />
           </Left>
           <Right>

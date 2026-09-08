@@ -56,6 +56,8 @@ export const mergeHistory = (perAddress, pending = []) => {
       blockIndex: entry.blockIndex,
       timestamp: entry.timestamp,
       pending: false,
+      // 코인베이스는 충분히 묻혀야 쓸 수 있다. 화면에서 그렇다고 알려 준다.
+      coinbase: entry.coinbase === true,
       ...classify(entry)
     }))
     .sort((a, b) => b.blockIndex - a.blockIndex);
