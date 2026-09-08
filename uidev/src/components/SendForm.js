@@ -148,7 +148,7 @@ class SendForm extends Component {
                 mono
                 autoComplete="off"
                 spellCheck="false"
-                placeholder="04 로 시작하는 130자 주소"
+                placeholder="L 로 시작하는 주소 (테스트넷은 m 또는 n)"
                 value={address}
                 onChange={this._change("address")}
                 disabled={busy || disabled}
