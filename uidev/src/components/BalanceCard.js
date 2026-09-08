@@ -59,7 +59,7 @@ const AddressText = styled(Mono)`
   flex: 1;
   min-width: 0;
   color: var(--textMuted);
-  /* 주소는 130자라 그대로 두면 카드를 밀어낸다 */
+  /* 예전 형식 주소는 130자라 그대로 두면 카드를 밀어낸다 (새 형식은 34자) */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
