@@ -120,7 +120,19 @@ const formatTime = seconds => {
 const confirmationsOf = (item, height) =>
   typeof height === "number" ? height - item.blockIndex + 1 : null;
 
-const History = ({ items, loading, height }) => (
+/*
+ * 채굴 보상은 바로 쓸 수 없다. 체인이 갈라져 그 블록이 밀려나면
+ * 코인베이스는 통째로 사라지므로, 충분히 묻힐 때까지 기다린다.
+ * 잔액에는 보이는데 못 쓰는 이유를 여기서 알려 준다.
+ */
+const blocksUntilMature = (item, height, maturity) => {
+  if (!item.coinbase || typeof height !== "number" || typeof maturity !== "number") {
+    return 0;
+  }
+  return Math.max(0, maturity - (height - item.blockIndex));
+};
+
+const History = ({ items, loading, height, coinbaseMaturity }) => (
   <Wrap>
     <CardTitle>내역</CardTitle>
     {items.length === 0 ? (
@@ -133,12 +145,16 @@ const History = ({ items, loading, height }) => (
           const label = LABELS[item.kind];
           const RowTag = item.pending ? PendingRow : Row;
           const confirmations = item.pending ? null : confirmationsOf(item, height);
+          const ripening = item.pending
+            ? 0
+            : blocksUntilMature(item, height, coinbaseMaturity);
           return (
             <RowTag key={item.id}>
               <Icon kind={item.kind}>{label.icon}</Icon>
               <Detail>
                 <Kind>
                   {item.pending && <Badge>대기 중</Badge>}
+                  {ripening > 0 && <Badge>{ripening}블록 뒤 사용 가능</Badge>}
                   {label.text}
                 </Kind>
                 <Meta title={item.id}>
