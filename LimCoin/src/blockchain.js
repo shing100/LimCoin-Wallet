@@ -6,6 +6,7 @@ const Wallet = require("./wallet"),
   AddressIndex = require("./addressIndex"),
   ChainIndex = require("./chainIndex"),
   PoW = require("./pow"),
+  Target = require("./target"),
   { Worker } = require("worker_threads"),
   os = require("os"),
   path = require("path");
@@ -26,7 +27,8 @@ const {
   sumBlockFees,
   isSpendable,
   COINBASE_MATURITY,
-  MAX_TXS_PER_BLOCK
+  MAX_TXS_PER_BLOCK,
+  MAX_BLOCK_BYTES
 } = Transactions;
 
 const {
@@ -35,8 +37,30 @@ const {
 } = Mempool;
 const { indexByOutpoint } = require("./utxo");
 
-const BlOCK_GENERATION_INTERVAL = 10;  //  블록 생성 주기
-const DIFFICULTY_ADJUSMENT_INTERVAL = 10; // 난이도 조정 주기
+const BlOCK_GENERATION_INTERVAL = 10;  //  블록 생성 주기(초)
+// 헤더 version. 규칙을 바꿀 때 채굴자가 새 값을 적어 찬성을 표시하는 자리다.
+const BLOCK_VERSION = 1;
+
+/*
+ * 되감을 수 있는 최대 깊이.
+ *
+ * 공개 해시레이트가 적은 체인의 가장 큰 위험은 "빌린 해시레이트로 처음부터
+ * 다시 캐서 더 무거운 체인을 내미는 것"이다. 무게만 보면 그런 체인이
+ * 이긴다. 그래서 우리가 이미 100블록 넘게 쌓은 자리는 다시 쓰지 않는다.
+ *
+ * 값을 치른다: 정말로 그만큼 뒤처진 노드는 스스로 따라잡지 못하고 갈라진
+ * 채로 남는다. 그때는 LIMCOIN_MAX_REORG_DEPTH=0 으로 끄고 다시 뜨거나
+ * 데이터 디렉터리를 비우고 처음부터 받아야 한다. 비트코인에는 이 규칙이
+ * 없다 — 해시레이트가 충분하면 필요 없기 때문이다.
+ */
+const configuredReorgDepth = Number.parseInt(process.env.LIMCOIN_MAX_REORG_DEPTH, 10);
+const MAX_REORG_DEPTH = Number.isInteger(configuredReorgDepth) ? configuredReorgDepth : 100;
+
+// undo 데이터를 들고 있을 깊이. 되감을 수 있는 깊이보다 넉넉해야 한다.
+const KEEP_UNDO = 200;
+
+// 스냅샷을 몇 블록마다 남길지
+const SNAPSHOT_INTERVAL = 500;
 /*
  * 타임스탬프 규칙. 비트코인과 같은 방식이다.
  *
@@ -55,13 +79,12 @@ const DIFFICULTY_ADJUSMENT_INTERVAL = 10; // 난이도 조정 주기
  */
 const MEDIAN_TIME_SPAN = 11;
 const MAX_FUTURE_BLOCK_TIME = 2 * 60 * 60;
-const MIN_DIFFICULTY = 1; // 0 이면 어떤 해시든 통과해 버린다
 
 /*
  * 블록 = 헤더 + 본문.
  *
- * 헤더가 커밋하는 것은 index, previousHash, timestamp, merkleRoot,
- * difficulty, nonce 뿐이다. 트랜잭션 목록(data)은 머클 루트를 통해서만
+ * 헤더가 커밋하는 것은 version, index, previousHash, timestamp, merkleRoot,
+ * bits, nonce 뿐이다. 트랜잭션 목록(data)은 머클 루트를 통해서만
  * 묶인다 — 백서 7장 "transactions are hashed in a Merkle Tree, with only
  * the root included in the block's hash".
  *
@@ -70,14 +93,15 @@ const MIN_DIFFICULTY = 1; // 0 이면 어떤 해시든 통과해 버린다
  * 트랜잭션 하나가 블록에 있는지 확인하려면 블록 전체를 받아야 했다.
  */
 class Block{
-  constructor(index, hash, previousHash, timestamp, merkleRoot, data, difficulty, nonce){
+  constructor(version, index, hash, previousHash, timestamp, merkleRoot, data, bits, nonce){
+    this.version = version;
     this.index = index;
     this.hash = hash;
     this.previousHash = previousHash;
     this.timestamp = timestamp;
     this.merkleRoot = merkleRoot;
     this.data = data;
-    this.difficulty = difficulty;
+    this.bits = bits;
     this.nonce = nonce;
   }
 }
@@ -89,20 +113,21 @@ const Params = require("./params");
 const genesisData = require(Params.current().genesisFile);
 
 const genesisBlock = new Block(
+  genesisData.version,
   genesisData.index,
   genesisData.hash,
   genesisData.previousHash,
   genesisData.timestamp,
   genesisData.merkleRoot,
   genesisData.data,
-  genesisData.difficulty,
+  genesisData.bits,
   genesisData.nonce
 );
 
 // 블록체인
 let blockchain = [genesisBlock];
 
-let uTxOuts = processTxs(blockchain[0].data, [], 0);
+let uTxOuts = processTxs(blockchain[0].data, [], 0, 0);
 AddressIndex.applyBlock(genesisBlock, []);
 ChainIndex.applyBlock(genesisBlock);
 
@@ -179,10 +204,15 @@ const mineTemplate = async () => {
 
   // mempool 전체를 그대로 담던 것을 한도 안에서 수수료율 높은 순으로 고른다.
   // 코인베이스 자리 하나를 빼고 담는다.
+  /*
+   * 코인베이스 자리를 미리 빼 둔다. 블록 한도는 바이트가 먼저고 건수는
+   * 안전판이다 — 코인베이스는 한 건에 200바이트쯤 든다.
+   */
+  const COINBASE_RESERVE = 400;
   const selected = selectTxsForBlock(
     getMempool(),
     snapshot,
-    MAX_TXS_PER_BLOCK - 1,
+    { maxTxs: MAX_TXS_PER_BLOCK - 1, maxBytes: MAX_BLOCK_BYTES - COINBASE_RESERVE },
     nextIndex
   );
   /*
@@ -195,7 +225,10 @@ const mineTemplate = async () => {
   // 채굴자는 보조금에 더해 담은 트랜잭션들의 수수료를 가져간다 (백서 6장)
   const coinbaseTx = createCoinbaseTx(miningAddress(), nextIndex, totalFees);
 
-  const full = selected.length >= MAX_TXS_PER_BLOCK - 1;
+  const full =
+    selected.length >= MAX_TXS_PER_BLOCK - 1 ||
+    selected.reduce((sum, tx) => sum + Transactions.getTxSize(tx), 0) >=
+      MAX_BLOCK_BYTES - COINBASE_RESERVE;
   return await createNewRawBlock([coinbaseTx, ...selected], { restartOnNewTx: !full });
 };
 
@@ -209,13 +242,13 @@ const createNewRawBlock = async (data, { restartOnNewTx = false } = {}) => {
    * (비트코인 코어의 GetMinimumTime 과 같은 처리다)
    */
   const newTimestamp = Math.max(getTimestamp(), medianTimePast(blockchain) + 1);
-  const difficulty = difficultyForNext(blockchain, newTimestamp);
+  const bits = bitsForNext(blockchain, newTimestamp);
   const mining = findBlockInWorkers(
     newBlockIndex,
     previousBlock.hash,
     newTimestamp,
     data,
-    difficulty
+    bits
   );
 
   /*
@@ -257,88 +290,62 @@ const createNewRawBlock = async (data, { restartOnNewTx = false } = {}) => {
   return newBlock;
 }
 
-// 블록 난이도 찾기 와 조정
+// 다음 블록의 목표값
 /*
- * chain 다음에 올 블록이 가져야 하는 난이도.
+ * chain 다음에 올 블록이 가져야 하는 bits(압축 목표값).
  *
- * 예전에는 우리 체인만 볼 수 있었다(findDifficulty). 그래서 남이 보낸
- * 후보 체인의 블록은 난이도를 스스로 정해도 아무도 따지지 않았다.
- * 검증하는 쪽은 그 체인의 앞부분을 기준으로 계산해야 한다.
+ * 검증하는 쪽은 *후보 체인의* 앞부분을 기준으로 계산한다 — 우리 체인만
+ * 보면 남이 보낸 체인의 난이도를 따질 수 없다. 채굴하는 쪽도 같은 함수를
+ * 쓰므로 둘이 어긋날 수 없다.
+ *
+ * 목표값은 블록마다 LWMA 로 고친다(target.js). 처음 lwmaWindow 블록은
+ * 제네시스의 목표값을 그대로 쓴다.
  */
-const difficultyForNext = (chain, newTimestamp) => {
+const bitsForNext = (chain, newTimestamp) => {
   const newestBlock = chain[chain.length - 1];
+  const params = Params.current();
 
   /*
    * 테스트넷의 "20분 규칙" (비트코인 fPowAllowMinDifficultyBlocks).
    *
    * 큰 채굴자가 난이도를 올려 놓고 떠나면 남은 노트북은 블록 하나에 몇
-   * 시간이 걸리고, 난이도는 10블록마다 1씩만 내려가니 체인이 사실상 멎는다.
-   * 테스트넷은 값어치가 없으므로, 직전 블록 뒤로 목표 주기의 20배(200초)가
-   * 지났으면 그 블록은 최소 난이도로 만들어도 받아 준다. 그 다음 블록은
-   * 다시 원래 난이도로 돌아간다(특별 블록의 난이도를 이어받지 않는다).
+   * 시간이 걸려 체인이 사실상 멎는다. 테스트넷은 값어치가 없으므로, 직전
+   * 블록 뒤로 목표 주기의 20배(200초)가 지났으면 그 블록은 최소 난이도로
+   * 만들어도 받아 준다. 그 다음 블록은 원래 난이도로 돌아간다 — LWMA 창
+   * 안에서 특별 블록은 중립으로 취급한다(isSpecialBlock).
    * 메인넷에는 없다 — 시간을 앞당겨 적은 채굴자가 난이도를 피할 수 있으므로.
    */
-  const params = Params.current();
   if (
     params.allowMinDifficultyBlocks &&
     typeof newTimestamp === "number" &&
     newTimestamp > newestBlock.timestamp + BlOCK_GENERATION_INTERVAL * 20
   ) {
-    return MIN_DIFFICULTY;
+    return Target.POW_LIMIT_BITS;
   }
 
-  if(newestBlock.index % DIFFICULTY_ADJUSMENT_INTERVAL === 0 && newestBlock.index !== 0) {
-    return calculateNewDifficulty(newestBlock, chain);
-  }
-  return lastRealDifficulty(chain);
-}
-
-/*
- * 특별(최소 난이도) 블록을 건너뛴 마지막 진짜 난이도.
- * 조정 높이의 블록은 특별 블록이 아니므로 거기서 멈춘다.
- * 메인넷에서는 그냥 끝 블록의 난이도다.
- */
-const lastRealDifficulty = chain => {
-  if (!Params.current().allowMinDifficultyBlocks) {
-    return chain[chain.length - 1].difficulty;
-  }
-  let i = chain.length - 1;
-  while (
-    i > 0 &&
-    chain[i].index % DIFFICULTY_ADJUSMENT_INTERVAL !== 0 &&
-    chain[i].difficulty === MIN_DIFFICULTY
-  ) {
-    i--;
-  }
-  return chain[i].difficulty;
+  return Target.nextTargetBits(chain, {
+    T: BlOCK_GENERATION_INTERVAL,
+    N: params.lwmaWindow,
+    genesisBits: genesisBlock.bits,
+    isSpecial: params.allowMinDifficultyBlocks ? isSpecialBlock : () => false
+  });
 };
 
-const findDifficulty = () => difficultyForNext(getBlockChain(), getTimestamp());
+// 테스트넷 특별(최소 난이도) 블록인가: 직전 블록보다 200초 넘게 뒤이고 bits 가 바닥이다
+const isSpecialBlock = (i, chain) =>
+  i > 0 &&
+  chain[i].bits === Target.POW_LIMIT_BITS &&
+  chain[i].timestamp > chain[i - 1].timestamp + BlOCK_GENERATION_INTERVAL * 20;
 
-// 난이도 계산기
+// 지금 채굴하면 써야 할 bits
+const findBits = () => bitsForNext(getBlockChain(), getTimestamp());
+
 /*
- * 조정 높이(10의 배수)에서 다음 난이도.
- *
- * 마지막 10블록이 걸린 시간을 목표(100초)와 견준다. 10블록의 시간은 그
- * 앞 블록(index-10)의 타임스탬프에서 끝 블록까지다. 예전에는 index-9 부터
- * 재서 9구간을 10구간으로 치는 바람에 "너무 빨랐다"로 기울었다 — 비트코인에
- * 있는 것과 같은 오프바이원인데, 우리는 호환할 옛 체인이 없으니 고친다.
- *
- * 기준 난이도는 마지막 진짜 난이도다(테스트넷 특별 블록은 건너뛴다).
+ * mempool 에 넣을 때 쓰는 "지금 시각" — 내 시계가 아니라 체인 끝의 MTP 다.
+ * 시각 기반 lockTime 은 블록에 담길 때 MTP 로 판정되므로, 미리 볼 때도 같은
+ * 잣대를 써야 "받아 놓고 담지 못하는" 트랜잭션이 생기지 않는다.
  */
-const calculateNewDifficulty = (newestBlock, blockchain) => {
-  const windowStart = blockchain[blockchain.length - 1 - DIFFICULTY_ADJUSMENT_INTERVAL];
-  const base = lastRealDifficulty(blockchain);
-  const timeExpected = BlOCK_GENERATION_INTERVAL * DIFFICULTY_ADJUSMENT_INTERVAL;
-  const timeTaken = newestBlock.timestamp - windowStart.timestamp;
-  if(timeTaken < timeExpected/2){
-    return base + 1;
-  }else if(timeTaken > timeExpected*2){
-    return Math.max(MIN_DIFFICULTY, base - 1);
-  }else{
-    return base;
-  }
-}
+const tipMedianTime = () => medianTimePast(getBlockChain());
 
 /*
  * nonce 찾기를 워커 스레드에 맡긴다.
@@ -408,9 +415,9 @@ const stopMiners = async () => {
   await Promise.all(workers.map(worker => worker.terminate()));
 };
 
-const findBlockInWorkers = (index, previousHash, timestamp, data, difficulty) => {
+const findBlockInWorkers = (index, previousHash, timestamp, data, bits) => {
   const merkleRoot = getMerkleRoot(data);
-  const header = { index, previousHash, timestamp, merkleRoot, difficulty };
+  const header = { version: BLOCK_VERSION, index, previousHash, timestamp, merkleRoot, bits };
 
   const workers = getPool();
   const stride = workers.length;
@@ -449,8 +456,8 @@ const findBlockInWorkers = (index, previousHash, timestamp, data, difficulty) =>
         }
         win(
           new Block(
-            index, message.hash, previousHash, timestamp,
-            merkleRoot, data, difficulty, message.nonce
+            BLOCK_VERSION, index, message.hash, previousHash, timestamp,
+            merkleRoot, data, bits, message.nonce
           )
         );
       };
@@ -483,6 +490,9 @@ const findBlockInWorkers = (index, previousHash, timestamp, data, difficulty) =>
 // 타임스탬프 유효성 검사
 // 직전 MEDIAN_TIME_SPAN 블록 타임스탬프의 중앙값
 const medianTimePast = chain => {
+  if (chain.length === 0) {
+    return 0;
+  }
   const recent = chain
     .slice(-MEDIAN_TIME_SPAN)
     .map(block => block.timestamp)
@@ -493,8 +503,8 @@ const medianTimePast = chain => {
 const isTimeStampValid = (newBlock, chainSoFar) =>
   newBlock.timestamp > medianTimePast(chainSoFar) &&
   newBlock.timestamp <= getTimestamp() + MAX_FUTURE_BLOCK_TIME;
-// 헤시 만들기
-const getBlockHash = block => createHash(block.index, block.previousHash, block.timestamp, block.merkleRoot, block.difficulty, block.nonce);
+// 헤더 해시
+const getBlockHash = block => createHash(headerOf(block));
 
 // genesis Block 초기 hash 값 넣기
 //console.log(createHash(genesisBlock));
@@ -522,6 +532,9 @@ const isBlockValid = (candidateBlock, chainSoFar) => {
     console.log('The candidate block structure is not valid');
     return false;
   }
+  if(violatesCheckpoint(candidateBlock)){
+    return false;
+  }
   if(!isHeaderValid(candidateBlock, chainSoFar)){
     return false;
   }
@@ -543,22 +556,25 @@ const isBlockValid = (candidateBlock, chainSoFar) => {
  */
 const isHeaderValid = (header, chainSoFar) => {
   const latestBlock = chainSoFar[chainSoFar.length - 1];
-  const expectedDifficulty = difficultyForNext(
-    chainSoFar,
-    header !== null && typeof header === "object" ? header.timestamp : undefined
-  );
 
   if(!isHeaderStructureValid(header)){
     console.log('The header structure is not valid');
     return false;
-  }else if(header.difficulty < MIN_DIFFICULTY){
-    console.log('The block difficulty is not valid');
+  }
+  if(header.version < 1){
+    console.log('The block version is not valid');
     return false;
-  }else if(header.difficulty !== expectedDifficulty){
-    console.log(`The block difficulty ${header.difficulty} is not the expected ${expectedDifficulty}`);
+  }
+  if(!Target.isValidBits(header.bits)){
+    console.log(`The block bits are not valid: ${header.bits}`);
     return false;
-  }else if(!PoW.hashMatchesDifficulty(header.hash, header.difficulty)){
-    console.log('The block hash does not meet the claimed difficulty');
+  }
+  const expectedBits = bitsForNext(chainSoFar, header.timestamp);
+  if(header.bits !== expectedBits){
+    console.log(`The block bits ${header.bits.toString(16)} are not the expected ${expectedBits.toString(16)}`);
+    return false;
+  }else if(!PoW.hashMeetsBits(header.hash, header.bits)){
+    console.log('The block hash does not meet the claimed target');
     return false;
   }else if(latestBlock.index + 1 !== header.index){
     console.log('The block doesnt have a valid index')
@@ -580,22 +596,24 @@ const isHeaderValid = (header, chainSoFar) => {
 const isHeaderStructureValid = header =>
   header !== null &&
   typeof header === "object" &&
+  Number.isInteger(header.version) &&
   typeof header.index === 'number' &&
   typeof header.hash === 'string' &&
   typeof header.previousHash === 'string' &&
   typeof header.timestamp === 'number' &&
   typeof header.merkleRoot === 'string' &&
-  typeof header.difficulty === 'number' &&
+  Number.isInteger(header.bits) &&
   typeof header.nonce === 'number';
 
 // 블록에서 헤더만 떼어 낸다 (본문 없이 보낼 때)
 const headerOf = block => ({
+  version: block.version,
   index: block.index,
   hash: block.hash,
   previousHash: block.previousHash,
   timestamp: block.timestamp,
   merkleRoot: block.merkleRoot,
-  difficulty: block.difficulty,
+  bits: block.bits,
   nonce: block.nonce
 });
 
@@ -606,11 +624,13 @@ const isBlockStructureValid = (block) => {
     return false;
   }
   return (
+    Number.isInteger(block.version) &&
     typeof block.index === 'number' &&
     typeof block.hash === 'string' &&
     typeof block.previousHash === 'string' &&
     typeof block.timestamp === 'number' &&
     typeof block.merkleRoot === 'string' &&
+    Number.isInteger(block.bits) &&
     block.data instanceof Array
   );
 };
@@ -642,9 +662,38 @@ const rewindTo = common => {
   }
   let working = uTxOuts;
   for (let i = blockchain.length - 1; i >= common; i--) {
+    if (undoLog[i] === null) {
+      // 오래된 블록의 undo 는 버렸다(KEEP_UNDO). 그만큼 깊이 갈 일은 없지만.
+      console.log(`블록 #${i} 의 undo 데이터가 없습니다. 제네시스부터 다시 재생합니다.`);
+      return null;
+    }
     working = rollbackTxs(blockchain[i].data, working, undoLog[i]);
   }
   return working;
+};
+
+// 오래된 undo 데이터는 버린다. 배열 자리는 남겨 두어 인덱스가 어긋나지 않게 한다.
+const trimUndoLog = () => {
+  for (let i = undoLog.length - KEEP_UNDO - 1; i >= 0; i--) {
+    if (undoLog[i] === null) {
+      break;
+    }
+    undoLog[i] = null;
+  }
+};
+
+/*
+ * 체크포인트 — 그 높이의 블록은 반드시 정해진 해시여야 한다 (params.js).
+ * 그 높이보다 앞을 다시 쓰는 체인은 아무리 무거워도 받지 않는다.
+ */
+const violatesCheckpoint = block => {
+  for (const [height, hash] of Params.current().checkpoints) {
+    if (block.index === height && block.hash !== hash) {
+      console.log(`블록 #${height} 이 체크포인트(${hash})와 다릅니다: ${block.hash}`);
+      return true;
+    }
+  }
+  return false;
 };
 
 /**
@@ -686,6 +735,20 @@ const isChainValid = (candidateChain) => {
     };
 
     const common = countCommonPrefix(blockchain, candidateChain);
+
+    /*
+     * 우리가 이미 깊이 쌓은 자리를 다시 쓰려는 체인은 받지 않는다.
+     * 무게만 보면 이기는 체인이라도 그렇다 (MAX_REORG_DEPTH).
+     */
+    const rewindDepth = blockchain.length - common;
+    if (MAX_REORG_DEPTH > 0 && rewindDepth > MAX_REORG_DEPTH) {
+      console.log(
+        `${rewindDepth}블록을 되감으라는 체인입니다. 상한은 ${MAX_REORG_DEPTH} 입니다 ` +
+          `(LIMCOIN_MAX_REORG_DEPTH 로 조절).`
+      );
+      return null;
+    }
+
     const chain = blockchain.slice(0, common);
     const undo = undoLog.slice(0, common);
 
@@ -708,7 +771,7 @@ const isChainValid = (candidateChain) => {
 
       // 재생하기 전의 집합에서 뽑아야 블록 안에서 만들어졌다 쓰인 출력이 빠진다
       const consumed = collectConsumed(currentBlock.data, working);
-      const processed = processTxs(currentBlock.data, working, currentBlock.index);
+      const processed = processTxs(currentBlock.data, working, currentBlock.index, medianTimePast(chain));
 
       if(processed === null){
         return null;
@@ -719,15 +782,10 @@ const isChainValid = (candidateChain) => {
     };
     return { chain, uTxOuts: working, undo, common, uTxOutsAtCommon };
 };
-// 난이도 구분하기
-// 체인의 무게. 난이도 d 인 블록은 평균 2^d 번 해시해야 나오므로 그만큼 일한 것이다.
+// 체인의 무게 = 블록마다 목표값을 맞히는 데 드는 평균 해시 횟수(2^256/(target+1))의 합. BigInt.
 // 헤더만 있어도 셀 수 있다 — 동기화 때 블록을 받기 전에 비교하는 데 쓴다.
 const chainWork = anyBlockchain =>
-  anyBlockchain
-    .map(block => block.difficulty)
-    .map(difficulty => Math.pow(2,difficulty))
-    .reduce((a,b) => a + b, 0);
-const sumDifficulty = chainWork;
+  anyBlockchain.reduce((sum, block) => sum + Target.workOf(block.bits), 0n);
 // 블록체인 재배치
 const replaceChain = candidateChain => {
   const validated = isChainValid(candidateChain);
@@ -756,6 +814,9 @@ const replaceChain = candidateChain => {
     blockchain = validated.chain;
     uTxOuts = validated.uTxOuts;
     undoLog = validated.undo;
+    trimUndoLog();
+    // 갈아 끼웠으니 예전 스냅샷은 더 이상 이 체인의 것이 아니다
+    Store.dropChainstate();
 
     if (droppedFrom !== null) {
       AddressIndex.rollbackTo(droppedFrom);
@@ -811,7 +872,7 @@ const reinstateTxs = txs => {
   let restored = 0;
   for (const tx of txs) {
     try {
-      addToMempool(tx, snapshot, nextHeight());
+      addToMempool(tx, snapshot, nextHeight(), tipMedianTime());
       restored++;
     } catch (e) {
       // 이미 다른 트랜잭션이 같은 UTxO 를 썼거나 유효하지 않게 된 경우
@@ -838,7 +899,7 @@ const restoreMempool = () => {
   let restored = 0;
   for (const tx of saved) {
     try {
-      addToMempool(tx, snapshot, nextHeight());
+      addToMempool(tx, snapshot, nextHeight(), tipMedianTime());
       restored++;
     } catch (e) {
       // 이미 담겼거나 더는 유효하지 않다
@@ -883,7 +944,9 @@ const addBlockToChain = candidateBlock => {
     const processedTxs = processTxs(
       candidateBlock.data,
       uTxOuts,
-      candidateBlock.index
+      candidateBlock.index,
+      // 시각 기반 lockTime 은 내 시계가 아니라 직전 11블록의 중앙값과 견준다
+      medianTimePast(blockchain)
     );
     if(processedTxs === null){
       console.log("Couldnt process txs");
@@ -895,9 +958,14 @@ const addBlockToChain = candidateBlock => {
         ChainIndex.applyBlock(candidateBlock);
         blockchain.push(candidateBlock);
         undoLog.push(collectConsumed(candidateBlock.data, uTxOuts));
+        trimUndoLog();
         uTxOuts = processedTxs;
         updateMempool(uTxOuts);
         Store.appendBlock(candidateBlock);
+        // 가끔 스냅샷을 남겨 다음에 뜰 때 전부 재생하지 않게 한다
+        if (candidateBlock.index % SNAPSHOT_INTERVAL === 0) {
+          persistChainstate();
+        }
         return true;
     }
     //return true;
@@ -962,14 +1030,29 @@ const findTx = txId => {
  * 저장된 블록을 하나씩 다시 검증하며 UTxOut 집합을 재구성한다. 검증에
  * 실패하는 블록이 나오면 거기서 멈춘다 — 뒤쪽은 P2P 로 다시 받으면 된다.
  */
+/*
+ * 메모리 상태를 제네시스만 있는 상태로 되돌린다.
+ *
+ * 데이터 디렉터리가 비어 있거나 제네시스가 바뀌었을 때 부른다. 예전에는
+ * 이때 아무것도 되돌리지 않고 그냥 돌아갔다 — 이미 체인을 들고 있던
+ * 프로세스가 빈 디렉터리로 다시 뜨면 메모리와 디스크가 어긋난 채로 돌았다.
+ */
+const resetToGenesis = () => {
+  blockchain = [genesisBlock];
+  uTxOuts = processTxs(genesisBlock.data, [], 0, 0);
+  undoLog = [collectConsumed(genesisBlock.data, [])];
+  rebuildIndexes();
+};
+
 const initChain = (dataDir) => {
   Store.open(dataDir);
   const persisted = Store.loadBlocks();
 
   if (persisted.length === 0) {
     // 처음 뜨는 노드. 제네시스만 저장해 둔다.
+    resetToGenesis();
     Store.appendBlock(genesisBlock);
-    return { restored: 0, height: 0 };
+    return { restored: 0, height: 0, fromSnapshot: false };
   }
 
   if (
@@ -980,15 +1063,46 @@ const initChain = (dataDir) => {
     console.log(
       "저장된 체인의 제네시스가 지금 genesis.json 과 다릅니다. 저장본을 버리고 새로 시작합니다."
     );
+    resetToGenesis();
     Store.writeBlocks([genesisBlock]);
     // 저 체인에 속하던 mempool 도 함께 버린다
     Store.saveMempool([]);
-    return { restored: 0, height: 0 };
+    Store.dropChainstate();
+    return { restored: 0, height: 0, fromSnapshot: false };
+  }
+
+  /*
+   * 스냅샷이 저장된 체인의 끝과 맞으면 전부 재생하지 않는다.
+   *
+   * 이미 우리가 받아들여 디스크에 적어 둔 블록들이다. 서명 검증을 다시
+   * 하는 데 체인 길이에 비례하는 시간이 든다 — 만 블록이면 몇 분이다.
+   * 어긋나면(파일을 손댔거나 도중에 죽었거나) 그냥 버리고 재생한다.
+   */
+  const snapshot = Store.loadChainstate();
+  const tip = persisted[persisted.length - 1];
+  if (
+    snapshot !== null &&
+    snapshot.tipHash === tip.hash &&
+    snapshot.height === persisted.length - 1 &&
+    Array.isArray(snapshot.uTxOuts) &&
+    Array.isArray(snapshot.undo)
+  ) {
+    blockchain = persisted;
+    uTxOuts = snapshot.uTxOuts;
+    // undo 는 끝쪽 KEEP_UNDO 개만 남겨 두었다. 앞자리는 null 로 채운다.
+    undoLog = new Array(persisted.length).fill(null);
+    const from = Math.max(0, persisted.length - snapshot.undo.length);
+    snapshot.undo.forEach((entry, at) => {
+      undoLog[from + at] = entry;
+    });
+    rebuildIndexes();
+    restoreMempool();
+    return { restored: persisted.length, height: tip.index, fromSnapshot: true };
   }
 
   let chain = [persisted[0]];
   let undo = [collectConsumed(persisted[0].data, [])];
-  let utxos = processTxs(persisted[0].data, [], 0);
+  let utxos = processTxs(persisted[0].data, [], 0, 0);
 
   for (let i = 1; i < persisted.length; i++) {
     const block = persisted[i];
@@ -996,7 +1110,7 @@ const initChain = (dataDir) => {
       console.log(`저장된 블록 #${block.index} 이 유효하지 않습니다. 여기까지만 복원합니다.`);
       break;
     }
-    const processed = processTxs(block.data, utxos, block.index);
+    const processed = processTxs(block.data, utxos, block.index, medianTimePast(chain));
     if (processed === null) {
       console.log(`저장된 블록 #${block.index} 의 트랜잭션을 처리할 수 없습니다. 여기까지만 복원합니다.`);
       break;
@@ -1009,6 +1123,7 @@ const initChain = (dataDir) => {
   blockchain = chain;
   uTxOuts = utxos;
   undoLog = undo;
+  trimUndoLog();
   rebuildIndexes();
   restoreMempool();
 
@@ -1016,14 +1131,39 @@ const initChain = (dataDir) => {
   if (chain.length !== persisted.length) {
     Store.writeBlocks(chain);
   }
+  persistChainstate();
 
-  return { restored: chain.length, height: chain[chain.length - 1].index };
+  return { restored: chain.length, height: chain[chain.length - 1].index, fromSnapshot: false };
 };
 
-// 색인은 체인을 처음부터 재생해야 만들 수 있다.
+/*
+ * UTxOut 집합을 스냅샷으로 남긴다. 뜰 때 이것이 있으면 전부 재생하지 않는다.
+ * undo 는 되감을 수 있는 깊이만큼만 남긴다 — 전부 두면 파일이 체인만큼 커진다.
+ */
+const persistChainstate = () => {
+  if (blockchain.length === 0) {
+    return;
+  }
+  const tip = blockchain[blockchain.length - 1];
+  Store.saveChainstate({
+    version: 1,
+    height: blockchain.length - 1,
+    tipHash: tip.hash,
+    uTxOuts,
+    undo: undoLog.slice(-KEEP_UNDO)
+  });
+};
+
+/*
+ * 색인을 다시 만든다.
+ *
+ * 블록은 받아들일 때 이미 검증했으므로 여기서는 반영만 한다 — 예전에는
+ * processTxs 를 불러 서명을 전부 다시 확인했다. 색인을 다시 만드는 데
+ * 체인을 통째로 재검증할 이유가 없다.
+ */
 const rebuildIndexes = () => {
   AddressIndex.rebuild(blockchain, (block, before) =>
-    processTxs(block.data, before, block.index)
+    updateUTxOuts(block.data, before, block.index)
   );
   ChainIndex.rebuild(blockchain);
 };
@@ -1057,7 +1197,7 @@ const getAccountBalance = () => getWalletBalance(uTxOuts);
  * 확인 절차에는 확정된 집합을 그대로 넘긴다. addToMempool 이 안에서
  * 같은 계산을 하므로 두 번 더하면 안 된다.
  */
-const sendTx = (address, amount, fee = 0) => {
+const sendTx = (address, amount, fee = 0, feeRate = 0) => {
   const confirmed = getUTxOutList();
   let tx;
   try {
@@ -1067,7 +1207,8 @@ const sendTx = (address, amount, fee = 0) => {
       // 아직 묻히지 않은 코인베이스는 고르지 않는다. 골라 봐야 검증에서 떨어진다.
       getMatureUTxOuts(getSpendableUTxOuts(confirmed), nextHeight()),
       getMempool(),
-      fee
+      fee,
+      feeRate
     );
   } catch (e) {
     /*
@@ -1084,7 +1225,7 @@ const sendTx = (address, amount, fee = 0) => {
     }
     throw e;
   }
-  addToMempool(tx, confirmed, nextHeight());
+  addToMempool(tx, confirmed, nextHeight(), tipMedianTime());
   require("./p2p").broadcastTx(tx);
   return tx;
 };
@@ -1110,7 +1251,7 @@ const submitTx = tx => {
   if (tx.id !== expectedId) {
     throw Error(`id 가 내용과 맞지 않습니다 (계산값 ${expectedId})`);
   }
-  addToMempool(tx, getUTxOutList(), nextHeight());
+  addToMempool(tx, getUTxOutList(), nextHeight(), tipMedianTime());
   require("./p2p").broadcastTx(tx);
   return { id: tx.id, pending: true };
 };
@@ -1134,7 +1275,7 @@ const handleIncomingTxs = txs => {
   const snapshot = getUTxOutList();
   for (const tx of txs) {
     try {
-      addToMempool(tx, snapshot, nextHeight());
+      addToMempool(tx, snapshot, nextHeight(), tipMedianTime());
     } catch (e) {
       console.log(`피어가 보낸 트랜잭션을 받지 못했습니다: ${e.message}`);
     }
@@ -1148,19 +1289,19 @@ module.exports = {
   // 테스트용 — 채굴 워커를 직접 다룬다
   findBlockInWorkers,
   getMinerPool: getPool,
-  MIN_DIFFICULTY,
-  BlOCK_GENERATION_INTERVAL,
-  DIFFICULTY_ADJUSMENT_INTERVAL,
   initChain,
   persistMempool,
+  persistChainstate,
   rebuildIndexes,
+  MAX_REORG_DEPTH,
   getTxProof,
   getBlockByHash,
   getBlockByHeight,
   findTx,
-  calculateNewDifficulty,
-  difficultyForNext,
-  lastRealDifficulty,
+  bitsForNext,
+  findBits,
+  BLOCK_VERSION,
+  BlOCK_GENERATION_INTERVAL,
   medianTimePast,
   MAX_FUTURE_BLOCK_TIME,
   isBlockValid,
