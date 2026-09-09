@@ -198,8 +198,10 @@ class App extends Component {
             <SendForm
               onSend={this._send}
               disabled={!online}
-              recommendedFee={info ? info.recommendedFeePerInput : null}
-              congested={info ? info.mempoolSize >= info.maxTxsPerBlock - 1 : false}
+              feePerByte={info ? info.recommendedFeePerByte : null}
+              congested={
+                info ? info.mempoolBytes >= info.maxBlockBytes : false
+              }
             />
             <MineCard
               onMine={this._mine}

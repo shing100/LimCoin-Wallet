@@ -57,16 +57,23 @@ const initialState = {
  * 수수료 기본값은 노드가 권한 값이다.
  *
  * 예전에는 0.001 LIM 고정이었다. mempool 이 비어 있으면 그것도 과하고,
- * 붐비면 그걸로는 담기지 않는다. 노드가 지금 mempool 을 보고 입력 하나당
- * 얼마면 다음 블록에 담기는지 알려 주므로(/info 의 recommendedFeePerInput)
- * 그것을 채워 둔다. 사람이 고치기 전까지만 따라간다.
+ * 붐비면 그걸로는 담기지 않는다. 노드는 이제 바이트당 값을 권하므로
+ * (/info 의 recommendedFeePerByte) 보통 트랜잭션 크기를 곱해 채워 둔다.
+ * 사람이 고치기 전까지만 따라간다.
+ *
+ * 블록은 바이트로 차므로 수수료도 바이트로 매긴다 — 출력이 많은
+ * 트랜잭션은 그만큼 더 낸다.
  */
+// 입력 하나, 출력 둘짜리 보통 트랜잭션의 크기(바이트). 노드의 estimateTxSize 와 같은 값.
+const TYPICAL_TX_BYTES = 269;
 class SendForm extends Component {
   state = { ...initialState };
 
   _recommended = () => {
-    const { recommendedFee } = this.props;
-    return typeof recommendedFee === "number" ? formatLim(recommendedFee) : "0.001";
+    const { feePerByte } = this.props;
+    return typeof feePerByte === "number"
+      ? formatLim(Math.ceil(feePerByte * TYPICAL_TX_BYTES))
+      : "0.001";
   };
 
   // 사람이 손대기 전에는 권장값을 따라간다
