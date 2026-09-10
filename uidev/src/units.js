@@ -36,3 +36,27 @@ export const formatLim = amount => {
     : whole.toLocaleString();
   return negative ? `-${text}` : text;
 };
+
+/*
+ * 난이도.
+ *
+ * 노드는 `2^256/(target+1)` 을 제네시스 기준으로 나눈 실수를 준다. 그대로
+ * 찍으면 "1091224.7360582352" 처럼 소수점 열 자리가 나왔다 — 읽을 수도 없고
+ * 익스플로러(같은 값을 "1,091,225"로 보인다)와 달라 보였다.
+ * 익스플로러 utils.js 의 formatDifficulty 와 같은 규칙을 쓴다.
+ */
+export const formatDifficulty = difficulty => {
+  if (!Number.isFinite(difficulty) || difficulty <= 0) {
+    return "—";
+  }
+  if (difficulty >= 1e9) {
+    return `${(difficulty / 1e9).toFixed(2)}G`;
+  }
+  if (difficulty >= 1e6) {
+    return `${(difficulty / 1e6).toFixed(2)}M`;
+  }
+  if (difficulty >= 1e4) {
+    return Math.round(difficulty).toLocaleString();
+  }
+  return difficulty >= 100 ? difficulty.toFixed(0) : difficulty.toFixed(2);
+};

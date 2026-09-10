@@ -1,7 +1,7 @@
 import React, { Component } from "react";
 import styled from "styled-components";
 import { Card, CardTitle, CardBody, Button, Notice } from "../ui";
-import { formatLim } from "../units";
+import { formatLim, formatDifficulty } from "../units";
 
 const Stats = styled.dl`
   display: grid;
@@ -29,6 +29,14 @@ const Value = styled.dd`
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+`;
+
+// 잔액 카드와 같은 모양의 단위 꼬리표
+const Unit = styled.span`
+  margin-left: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
 `;
 
 const Hint = styled.p`
@@ -97,15 +105,21 @@ class MineCard extends Component {
             </Stat>
             <Stat>
               <Key>난이도</Key>
-              <Value>{difficulty === null ? "—" : difficulty}</Value>
+              <Value>{formatDifficulty(difficulty)}</Value>
             </Stat>
             <Stat>
               <Key>블록 보조금</Key>
-              <Value>{subsidy === null ? "—" : formatLim(subsidy)}</Value>
+              <Value>
+                {subsidy === null ? "—" : formatLim(subsidy)}
+                {subsidy === null ? null : <Unit>LIM</Unit>}
+              </Value>
             </Stat>
             <Stat>
               <Key>대기 수수료</Key>
-              <Value>{formatLim(pendingFees)}</Value>
+              <Value>
+                {formatLim(pendingFees)}
+                <Unit>LIM</Unit>
+              </Value>
             </Stat>
           </Stats>
           <Hint>
