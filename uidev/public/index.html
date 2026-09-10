@@ -10,6 +10,17 @@
     -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json">
     <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.ico">
+
+    <!--
+      Pretendard — 리포에 함께 둔다(SIL OFL 1.1, public/fonts/pretendard/LICENSE.txt).
+      CDN 을 쓰지 않는 이유는 예전과 같다: 로컬 노드를 보는 도구가 바깥 네트워크에
+      매달릴 이유가 없고, 지갑은 아예 오프라인에서도 떠야 한다.
+
+      동적 서브셋판이라 파일이 92개지만 브라우저는 화면에 실제로 쓰인 글자가
+      든 조각만 내려받는다(unicode-range). 전부 받는 판(2MB)을 쓰면 첫 화면이
+      그만큼 늦어진다.
+    -->
+    <link rel="stylesheet" href="%PUBLIC_URL%/fonts/pretendard/pretendard.css">
     <!--
       Notice the use of %PUBLIC_URL% in the tags above.
       It will be replaced with the URL of the `public` folder during the build.

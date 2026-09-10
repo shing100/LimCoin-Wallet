@@ -2,7 +2,7 @@ import React, { Component } from "react";
 import styled from "styled-components";
 import { Card, Mono, Button } from "../ui";
 import { formatLim } from "../units";
-import { radius } from "../theme";
+import { radius, space, tap, breakpoint } from "../theme";
 
 const Wrap = styled(Card)`
   padding: 24px 22px 20px;
@@ -65,33 +65,60 @@ const AddressText = styled(Mono)`
   white-space: nowrap;
 `;
 
+/*
+ * 카드 안의 보조 버튼. 본문보다 작지만 누를 수 있어야 한다 —
+ * 예전에는 28px 높이라 손가락으로는 빗나갔다.
+ */
 const SmallButton = styled(Button)`
   flex: none;
-  padding: 6px 12px;
+  min-height: ${tap.mouse};
+  padding: ${space.sm} ${space.md};
   font-size: 12px;
+
+  @media (max-width: ${breakpoint.sm}) {
+    min-height: ${tap.touch};
+  }
 `;
 
 const Footer = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 12px;
+  gap: ${space.md};
+  margin-top: ${space.md};
 `;
 
+/*
+ * 글자만 있는 버튼이라 높이가 글자 높이(18px)뿐이었다. 보이는 모양은
+ * 그대로 두고 누르는 자리만 넓힌다.
+ */
 const Toggle = styled.button`
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: ${tap.mouse};
+  padding: 0 ${space.xs};
+  margin-left: -${space.xs};
   border: none;
   background: none;
   color: var(--textMuted);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+  border-radius: ${radius.sm};
+
   &:hover { color: var(--accent); }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accentSoft);
+  }
+
+  @media (max-width: ${breakpoint.sm}) {
+    min-height: ${tap.touch};
+  }
 `;
 
 const AddressList = styled.ul`
-  margin: 10px 0 0;
+  margin: ${space.md} 0 0;
   padding: 0;
   list-style: none;
   max-height: 150px;

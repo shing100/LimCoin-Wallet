@@ -1,4 +1,5 @@
 import React, { Component } from "react";
+import { space, breakpoint } from "./theme";
 import styled from "styled-components";
 import Header from "./components/Header";
 import BalanceCard from "./components/BalanceCard";
@@ -24,13 +25,19 @@ const Main = styled.main`
   display: grid;
   grid-template-columns: minmax(320px, 1fr) minmax(300px, 380px);
   grid-template-rows: auto 1fr;
-  gap: 16px;
-  padding: 18px 22px 22px;
+  gap: ${space.lg};
+  padding: ${space.lg} ${space.xl} ${space.xl};
   overflow-y: auto;
 
-  @media (max-width: 780px) {
+  @media (max-width: ${breakpoint.stack}) {
     grid-template-columns: 1fr;
     grid-template-rows: none;
+    padding: ${space.lg};
+  }
+
+  @media (max-width: ${breakpoint.sm}) {
+    gap: ${space.md};
+    padding: ${space.md};
   }
 `;
 
@@ -50,13 +57,17 @@ const Left = styled.div`
   grid-row: 1 / span 2;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: ${space.lg};
   min-height: 0;
 
-  @media (max-width: 780px) {
+  @media (max-width: ${breakpoint.stack}) {
     grid-column: auto;
     grid-row: auto;
     min-height: auto;
+  }
+
+  @media (max-width: ${breakpoint.sm}) {
+    gap: ${space.md};
   }
 `;
 
@@ -65,16 +76,24 @@ const Right = styled.div`
   grid-row: 1 / span 2;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: ${space.lg};
 
-  @media (max-width: 780px) {
+  @media (max-width: ${breakpoint.stack}) {
     grid-column: auto;
     grid-row: auto;
+  }
+
+  @media (max-width: ${breakpoint.sm}) {
+    gap: ${space.md};
   }
 `;
 
 const OfflineNotice = styled(Notice)`
-  margin: 18px 22px 0;
+  margin: ${space.lg} ${space.xl} 0;
+
+  @media (max-width: ${breakpoint.stack}) {
+    margin: ${space.lg} ${space.lg} 0;
+  }
 `;
 
 class App extends Component {

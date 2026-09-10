@@ -1,5 +1,5 @@
 import styled, { css, injectGlobal } from "styled-components";
-import theme, { radius, mono, sans } from "./theme";
+import theme, { radius, mono, sans, space, tap, breakpoint } from "./theme";
 
 // 다크를 기본으로 두고, OS 가 밝기를 원하면 토큰만 갈아 끼운다.
 const vars = palette =>
@@ -50,7 +50,7 @@ export const Card = styled.section`
 
 export const CardTitle = styled.h2`
   margin: 0;
-  padding: 14px 18px;
+  padding: ${space.md} ${space.lg};
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -60,12 +60,16 @@ export const CardTitle = styled.h2`
 `;
 
 export const CardBody = styled.div`
-  padding: 18px;
+  padding: ${space.lg};
+
+  @media (max-width: ${breakpoint.sm}) {
+    padding: ${space.md};
+  }
 `;
 
 export const Label = styled.label`
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: ${space.xs};
   font-size: 12px;
   font-weight: 600;
   color: var(--textMuted);
@@ -73,7 +77,9 @@ export const Label = styled.label`
 
 const field = css`
   width: 100%;
-  padding: 10px 12px;
+  /* 입력칸도 손가락으로 눌러 커서를 놓는다 */
+  min-height: ${tap.mouse};
+  padding: ${space.sm} ${space.md};
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: ${radius.sm};
@@ -103,8 +109,13 @@ export const Button = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: ${space.sm};
+  /*
+   * 마우스로는 28px 도 눌리지만 손가락으로는 아니다. 좁은 창에서만 키워
+   * 데스크톱이 헐거워 보이지 않게 한다.
+   */
+  min-height: ${tap.mouse};
+  padding: ${space.sm} ${space.lg};
   border: 1px solid var(--borderStrong);
   border-radius: ${radius.sm};
   background: var(--surfaceRaised);
@@ -121,6 +132,10 @@ export const Button = styled.button`
     box-shadow: 0 0 0 3px var(--accentSoft);
   }
   &:disabled { opacity: .45; cursor: not-allowed; }
+
+  @media (max-width: ${breakpoint.sm}) {
+    min-height: ${tap.touch};
+  }
 
   ${props =>
     props.primary &&
@@ -142,8 +157,8 @@ export const Mono = styled.span`
 `;
 
 export const Notice = styled.p`
-  margin: 12px 0 0;
-  padding: 10px 12px;
+  margin: ${space.md} 0 0;
+  padding: ${space.sm} ${space.md};
   border-radius: ${radius.sm};
   font-size: 12.5px;
   background: ${props =>
@@ -161,7 +176,7 @@ export const Notice = styled.p`
 
 export const Empty = styled.p`
   margin: 0;
-  padding: 32px 18px;
+  padding: ${space.xxl} ${space.lg};
   text-align: center;
   color: var(--textFaint);
   font-size: 13px;
