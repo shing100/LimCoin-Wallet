@@ -17,6 +17,15 @@ const List = styled.ul`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+
+  /*
+   * 한 줄로 쌓이는 좁은 창에서는 목록이 내용만큼 늘어난다. 그대로 두면
+   * 내역 수백 건을 지나야 아래의 보내기·채굴 카드에 닿는다. 여기서도
+   * 스스로 스크롤하게 높이를 묶어 둔다.
+   */
+  @media (max-width: 780px) {
+    max-height: 60vh;
+  }
 `;
 
 const Row = styled.li`
@@ -29,11 +38,19 @@ const Row = styled.li`
   &:last-child { border-bottom: none; }
 `;
 
+/*
+ * 아이콘 배지의 바탕과 글자.
+ *
+ * 예전에는 바탕을 rgba 로 직접 적었다. 밝기가 테마와 따로 놀아, 그 위의
+ * 아이콘이 4.4:1 언저리로 AA 를 못 넘겼다(작은 13px 글자다). 이제 테마
+ * 토큰을 쓴다 — 라이트·다크가 각자 자기 바탕에 맞는 농도를 갖는다.
+ * self 는 accentSoft 위라 textMuted 로는 모자라서 본문색을 쓴다.
+ */
 const TONES = {
-  mined: { bg: "rgba(63,185,80,.14)", fg: "var(--positive)" },
-  received: { bg: "rgba(63,185,80,.14)", fg: "var(--positive)" },
-  sent: { bg: "rgba(248,81,73,.14)", fg: "var(--negative)" },
-  self: { bg: "var(--accentSoft)", fg: "var(--textMuted)" }
+  mined: { bg: "var(--positiveSoft)", fg: "var(--positive)" },
+  received: { bg: "var(--positiveSoft)", fg: "var(--positive)" },
+  sent: { bg: "var(--negativeSoft)", fg: "var(--negative)" },
+  self: { bg: "var(--accentSoft)", fg: "var(--text)" }
 };
 
 /*
@@ -53,8 +70,9 @@ const Badge = styled.span`
   margin-right: 6px;
   padding: 1px 6px;
   border-radius: 999px;
-  background: var(--accentSoft);
-  color: var(--accent);
+  /* 바탕을 불투명하게 — 반투명이면 뒤에 뭐가 오느냐에 따라 대비가 달라진다 */
+  background: var(--accentBadge);
+  color: var(--accentBadgeText);
   font-size: 10px;
   font-weight: 700;
   vertical-align: 1px;
@@ -109,11 +127,20 @@ const LABELS = {
   self: { text: "본인 이체", sign: "−", icon: "↻" }
 };
 
+/*
+ * 예전에는 `toLocaleString()` 만 불러 브라우저 로케일에 맡겼다. 화면 문구는
+ * 한국어인데 시각은 "9/10/2026, 12:21:32 AM" 처럼 미국식으로 나왔고,
+ * 기계마다 달랐다. 익스플로러와 같은 표기로 고정한다.
+ */
 const formatTime = seconds => {
-  if (typeof seconds !== "number") {
+  if (typeof seconds !== "number" || Number.isNaN(seconds)) {
     return "";
   }
-  return new Date(seconds * 1000).toLocaleString();
+  return new Date(seconds * 1000).toLocaleString("ko-KR", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false
+  });
 };
 
 // 이 트랜잭션 위에 블록이 몇 개 쌓였는가. 담긴 블록 자신도 한 번으로 센다.

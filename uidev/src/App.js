@@ -34,6 +34,17 @@ const Main = styled.main`
   }
 `;
 
+/*
+ * 왼쪽 칸(잔액 + 내역).
+ *
+ * `min-height: 0` 은 넓은 화면에서 필요하다 — 내역 목록이 남는 높이만큼만
+ * 차지하고 스스로 스크롤하게 하려면 flex 항목의 기본 최소 높이를 풀어야 한다.
+ *
+ * 그런데 좁은 화면(한 줄 배치)에서는 이 값이 그대로 남아 **칸 자체가 높이
+ * 0 으로 접혔다.** 잔액 카드와 내역이 칸 밖으로 흘러나와 오른쪽 칸 위에
+ * 겹쳐 그려졌다 — 잔액이 보이지 않고 "내역" 글자만 다른 카드 뒤에 깔렸다.
+ * 한 줄로 쌓을 때는 내용만큼 높이를 갖게 되돌린다.
+ */
 const Left = styled.div`
   grid-column: 1;
   grid-row: 1 / span 2;
@@ -45,6 +56,7 @@ const Left = styled.div`
   @media (max-width: 780px) {
     grid-column: auto;
     grid-row: auto;
+    min-height: auto;
   }
 `;
 
