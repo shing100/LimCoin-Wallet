@@ -9,7 +9,14 @@
       homescreen on Android. See https://developers.google.com/web/fundamentals/engage-and-retain/web-app-manifest/
     -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json">
-    <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.ico">
+    <!--
+      아이콘은 uidev/src/logo.json 하나에서 나온다(uidev/scripts/icons.js).
+      SVG 를 먼저 두는 이유는 크기에 상관없이 또렷하기 때문이고, .ico 는
+      그걸 못 읽는 브라우저용 대비다.
+    -->
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" sizes="any">
+    <link rel="icon" href="%PUBLIC_URL%/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png">
 
     <!--
       Pretendard — 리포에 함께 둔다(SIL OFL 1.1, public/fonts/pretendard/LICENSE.txt).
