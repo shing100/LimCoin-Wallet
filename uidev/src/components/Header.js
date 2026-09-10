@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { PORT } from "../api";
+import ThemeToggle from "./ThemeToggle";
 
 const Bar = styled.header`
   display: flex;
@@ -67,6 +68,7 @@ const Header = ({ online, peers }) => (
         {online ? `노드 :${PORT}` : "노드 연결 끊김"}
       </span>
       <span>피어 {peers}</span>
+      <ThemeToggle />
     </Status>
   </Bar>
 );
