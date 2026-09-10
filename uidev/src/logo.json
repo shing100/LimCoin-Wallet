@@ -1,0 +1,15 @@
+{
+  "_": "LimCoin 브랜드 마크의 유일한 원본. components/Logo 와 scripts/icons.js 가 둘 다 여기서 읽는다 — 모양을 바꾸려면 이 파일만 고치고 `node scripts/icons.js` 를 돌린다. 익스플로러(LimCoin-Explorer/src/logo.json)와 같은 값이어야 한다.",
+  "viewBox": 64,
+  "disc": { "cx": 32, "cy": 32, "r": 30 },
+  "rx": 2.5,
+  "blocks": [
+    [17.5, 13, 12, 12],
+    [17.5, 26, 12, 12],
+    [17.5, 39, 12, 12],
+    [30.5, 39, 16, 12]
+  ],
+  "gold": "#e0a82e",
+  "ink": "#231703",
+  "backdrop": "#161b22"
+}

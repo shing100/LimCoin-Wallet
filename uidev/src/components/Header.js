@@ -2,6 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import { PORT } from "../api";
 import ThemeToggle from "./ThemeToggle";
+import Logo from "./Logo";
 
 const Bar = styled.header`
   display: flex;
@@ -21,18 +22,6 @@ const Brand = styled.div`
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
-`;
-
-const Coin = styled.span`
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--accentText);
-  font-size: 13px;
-  font-weight: 800;
 `;
 
 const Status = styled.div`
@@ -59,7 +48,8 @@ const Dot = styled.span`
 const Header = ({ online, peers }) => (
   <Bar>
     <Brand>
-      <Coin>L</Coin>
+      {/* 옆에 이름이 글자로 붙어 있으므로 로고에는 이름을 주지 않는다 */}
+      <Logo size={26} />
       LimCoin Wallet
     </Brand>
     <Status>

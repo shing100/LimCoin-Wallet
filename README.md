@@ -1,3 +1,5 @@
+<img src="uidev/public/icon.svg" width="72" height="72" alt="LimCoin">
+
 # LimCoin Wallet
 
 LimCoin 용 Electron 데스크톱 지갑 (Windows / Linux / macOS).
@@ -161,6 +163,26 @@ QR 을 만들어 주는 웹 서비스에 넘기지 않는 이유는 두 가지�
 동일해야 한다.**
 
 > TODO: git submodule 이나 `file:` 의존성으로 바꿔서 복사본을 없앨 것.
+
+## 로고
+
+브랜드 마크는 **금화 안에 블록 네 개로 쌓은 L** 이다 — 익스플로러와 같은
+마크를 쓴다. 라이트/다크 어느 쪽에서도 색이 같다: 상표는 배경이 바뀐다고
+색이 바뀌는 것이 아니고, 그래야 창 아이콘·파비콘과 화면 속 로고가 같은
+물건으로 보인다.
+
+모양의 원본은 `uidev/src/logo.json` **하나뿐**이다. 헤더의 로고
+(`uidev/src/components/Logo.js`)와 파비콘·창 아이콘이 같은 좌표를 읽는다.
+
+```bash
+cd uidev
+node scripts/icons.js         # SVG 만 (의존성 없음)
+node scripts/icons.js --png   # PNG·ICO 까지 (headless Chromium 필요)
+```
+
+일렉트론 창 아이콘도 여기서 나온 `icon-512.png` 를 쓴다(`main.js`). 예전에는
+지정하지 않아 **기본 일렉트론 아이콘**이 작업표시줄에 떴고, 파비콘은
+create-react-app 이 넣어 준 **리액트 로고**가 그대로 남아 있었다.
 
 ## 글꼴
 

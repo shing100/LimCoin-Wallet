@@ -35,6 +35,17 @@ const startBlockchainNode = async () => {
   console.log(`Chain data: ${dataDir}`);
 };
 
+/*
+ * 창·작업표시줄 아이콘.
+ *
+ * 없으면 기본 일렉트론 아이콘(회색 원자 모양)이 뜬다 — 사용자 눈에는 "남의
+ * 앱"으로 보인다. macOS 는 이 값을 무시하고 .app 번들의 아이콘을 쓴다.
+ *
+ * 저장소에 있는 파일을 가리킨다(빌드하지 않아도 있는 자리다).
+ * 모양의 원본은 uidev/src/logo.json — uidev/scripts/icons.js 가 만든다.
+ */
+const WINDOW_ICON = path.join(__dirname, "uidev", "public", "icon-512.png");
+
 const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 1040,
@@ -43,7 +54,8 @@ const createWindow = () => {
     minHeight: 560,
     // 첫 페인트까지 흰 화면이 번쩍이는 것을 막는다
     backgroundColor: "#0d1117",
-    title: "LimCoin Wallet"
+    title: "LimCoin Wallet",
+    icon: WINDOW_ICON
   });
 
   if (process.env.ENV === "dev") {
