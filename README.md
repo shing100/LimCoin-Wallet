@@ -133,3 +133,13 @@ UTxOut 집합을 가진 노드만 할 수 있다. 그래서 노드가 계산해 
 동일해야 한다.**
 
 > TODO: git submodule 이나 `file:` 의존성으로 바꿔서 복사본을 없앨 것.
+
+## 글꼴
+
+본문은 [Pretendard](https://github.com/orioncactus/pretendard)(SIL OFL 1.1)를 쓴다.
+`uidev/public/fonts/pretendard/` 에 함께 두었다 — 데스크톱 지갑은 오프라인에서도
+떠야 하므로 CDN 을 쓰지 않는다.
+
+동적 서브셋판이라 파일이 92개지만 화면에 실제로 쓰인 글자가 든 조각만 읽힌다.
+익스플로러와 같은 글꼴·같은 디자인 토큰을 쓴다(`uidev/src/theme.js` 와
+`LimCoin-Explorer/src/theme.js` 는 같은 값이어야 한다).

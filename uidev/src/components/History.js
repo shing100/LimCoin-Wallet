@@ -1,4 +1,5 @@
 import React from "react";
+import { space, breakpoint } from "../theme";
 import styled from "styled-components";
 import { Card, CardTitle, Mono, Empty } from "../ui";
 import { formatLim } from "../units";
@@ -23,7 +24,7 @@ const List = styled.ul`
    * 내역 수백 건을 지나야 아래의 보내기·채굴 카드에 닿는다. 여기서도
    * 스스로 스크롤하게 높이를 묶어 둔다.
    */
-  @media (max-width: 780px) {
+  @media (max-width: ${breakpoint.stack}) {
     max-height: 60vh;
   }
 `;
@@ -31,9 +32,13 @@ const List = styled.ul`
 const Row = styled.li`
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 18px;
+  gap: ${space.md};
+  padding: ${space.md} ${space.lg};
   border-bottom: 1px solid var(--border);
+
+  @media (max-width: ${breakpoint.sm}) {
+    padding: ${space.md};
+  }
 
   &:last-child { border-bottom: none; }
 `;
@@ -68,12 +73,13 @@ const PendingRow = styled(Row)`
 const Badge = styled.span`
   display: inline-block;
   margin-right: 6px;
-  padding: 1px 6px;
+  padding: 1px ${space.sm};
   border-radius: 999px;
   /* 바탕을 불투명하게 — 반투명이면 뒤에 뭐가 오느냐에 따라 대비가 달라진다 */
   background: var(--accentBadge);
   color: var(--accentBadgeText);
-  font-size: 10px;
+  /* 10px 은 읽기에 너무 작다. 11px 아래로는 내려가지 않는다. */
+  font-size: 11px;
   font-weight: 700;
   vertical-align: 1px;
 `;

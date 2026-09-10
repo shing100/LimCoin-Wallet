@@ -20,10 +20,6 @@
  *   textFaint 다크   #6e7681 → #808892 (3.77 → 4.82:1)
  *     타임스탬프와 수수료가 12.5px 로 이 색이다. 작은 글자일수록 더 지켜야 한다.
  */
-const shared = {
-  radius: { sm: "6px", md: "10px", lg: "14px" }
-};
-
 const dark = {
   bg: "#0d1117",
   surface: "#161b22",
@@ -75,7 +71,39 @@ const light = {
   shadow: "0 1px 2px rgba(16,22,26,.06), 0 8px 24px rgba(16,22,26,.08)"
 };
 
-export const radius = shared.radius;
+export const radius = { sm: "6px", md: "10px", lg: "14px" };
+
+/*
+ * 간격은 4의 배수로만 쓴다.
+ *
+ * 예전에는 1, 5, 6, 7, 10, 14, 18, 20, 24, 32px 이 뒤섞여 있었다. 값 하나하나는
+ * 그럴듯해도 모아 놓으면 리듬이 없어서, 카드마다 여백이 조금씩 다르고 어디를
+ * 고쳐야 맞는지 알 수 없었다. 스케일을 정해 두면 고를 것이 줄고 두 앱이 같은
+ * 리듬을 갖는다.
+ */
+export const space = {
+  xs: "4px",    // 붙어 있는 것들 사이 (아이콘과 글자)
+  sm: "8px",    // 한 덩어리 안에서
+  md: "12px",   // 줄 사이, 칸 안쪽 여백
+  lg: "16px",   // 카드 사이, 카드 안쪽 여백
+  xl: "24px",   // 구획 사이
+  xxl: "32px",  // 화면 위아래 여백
+  huge: "48px"  // 화면 아래 남기는 자리
+};
+
+/*
+ * 누르는 것의 최소 크기.
+ *
+ * 마우스로는 28px 도 눌리지만 손가락으로는 아니다. 좁은 창에서만 키우면
+ * 데스크톱이 헐거워 보이지 않으면서 작은 화면에서 누를 수 있다.
+ */
+export const tap = { mouse: "36px", touch: "44px" };
+
+/*
+ * 창 폭 구분점. 익스플로러와 같은 값을 쓴다.
+ * 지갑은 780px 을 직접 적어 두고 있었다 — 이제 여기서 가져간다.
+ */
+export const breakpoint = { md: "860px", sm: "620px", stack: "780px" };
 
 export const mono =
   '"SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, "D2Coding", monospace';
@@ -88,7 +116,16 @@ export const mono =
  * 을 따로 깔지 않은 윈도우 사용자는 굴림 같은 옛 글꼴로 떨어졌다.
  * 리눅스는 fontconfig 이름이 "Noto Sans CJK KR" 이라 웹폰트 이름으로는 안 잡힌다.
  */
+/*
+ * Pretendard 를 먼저 쓴다. 리포에 함께 둔 것이라 네트워크를 타지 않는다
+ * (public/fonts/pretendard, SIL OFL 1.1).
+ *
+ * 뒤는 그대로 남겨 둔다 — 폰트 파일을 못 읽는 상황(캐시 실패, 파일 누락)에서도
+ * 화면이 굴림 같은 옛 글꼴로 떨어지지 않게 하려는 것이다. font-display: swap
+ * 이라 Pretendard 가 늦게 와도 글자가 먼저 보이고, 그동안 이 목록이 쓰인다.
+ */
 export const sans =
+  '"Pretendard Variable", Pretendard, ' +
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, ' +
   '"Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", "Malgun Gothic", ' +
   '"맑은 고딕", Helvetica, Arial, sans-serif';
