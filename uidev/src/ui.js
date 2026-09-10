@@ -7,6 +7,18 @@ const vars = palette =>
     .map(key => `--${key}: ${palette[key]};`)
     .join("\n    ");
 
+/*
+ * 밝기는 세 갈래 — 자동(OS 를 따름) · 라이트 · 다크.
+ *
+ * 예전에는 OS 설정만 따랐다. 지갑은 종일 띄워 두는 창이라, OS 는 다크로 두고
+ * 이 창만 밝게(또는 그 반대로) 쓰고 싶은 경우가 실제로 있다.
+ *
+ * 규칙의 순서가 곧 우선순위다. 익스플로러(globalStyles.js)와 뒤집힌 모양인
+ * 것에 주의 — 이쪽은 **다크가 바탕값**이라 :not() 이 붙는 곳도 반대다.
+ *   1. :root                          → 다크가 바탕값
+ *   2. @media light, [data-theme] 없음 → OS 가 라이트면 라이트 (자동)
+ *   3. :root[data-theme="light"]       → 사람이 고른 라이트가 OS 를 이긴다
+ */
 export const baseStyles = () => injectGlobal`
   :root {
     ${vars(theme.dark)}
@@ -14,10 +26,15 @@ export const baseStyles = () => injectGlobal`
   }
 
   @media (prefers-color-scheme: light) {
-    :root {
+    :root:not([data-theme="dark"]) {
       ${vars(theme.light)}
       color-scheme: light;
     }
+  }
+
+  :root[data-theme="light"] {
+    ${vars(theme.light)}
+    color-scheme: light;
   }
 
   *, *::before, *::after { box-sizing: border-box; }

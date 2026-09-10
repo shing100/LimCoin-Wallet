@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import styled from "styled-components";
 import { Card, Mono, Button } from "../ui";
+import QrCode from "./QrCode";
 import { formatLim } from "../units";
 import { radius, space, tap, breakpoint } from "../theme";
 
@@ -42,6 +43,39 @@ const Pending = styled.p`
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--textMuted);
+`;
+
+/*
+ * 잔액과 받을 주소 QR 을 나란히.
+ *
+ * 받을 주소를 남에게 알려 주는 일은 지갑에서 가장 자주 하는 일인데,
+ * 지금까지는 34자를 복사해 메신저로 보내는 길밖에 없었다. 상대가 휴대폰
+ * 지갑을 쓰면 그걸 다시 손으로 옮겨 적어야 했다 — 한 글자만 틀려도 돈이
+ * 사라지는 34자를.
+ */
+const Top = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: ${space.lg};
+`;
+
+const TopMain = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const QrSide = styled.div`
+  flex: none;
+`;
+
+const QrCaption = styled.p`
+  margin: ${space.xs} 0 0;
+  /* 11px 아래로는 내리지 않는다 — 글자 크기를 키워 쓰는 사람에게 먼저 무너진다 */
+  font-size: 11px;
+  text-align: center;
+  color: var(--textFaint);
 `;
 
 const AddressRow = styled.div`
@@ -161,16 +195,47 @@ class BalanceCard extends Component {
     clearTimeout(this.timer);
   }
 
+  _done = () => {
+    this.setState({ copied: true });
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.setState({ copied: false }), 1600);
+  };
+
   _copy = () => {
     const { address } = this.props;
-    if (!address || !navigator.clipboard) {
+    if (!address) {
       return;
     }
-    navigator.clipboard.writeText(address).then(() => {
-      this.setState({ copied: true });
-      clearTimeout(this.timer);
-      this.timer = setTimeout(() => this.setState({ copied: false }), 1600);
-    }, () => {});
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(address).then(this._done, () => this._legacyCopy());
+      return;
+    }
+    /*
+     * navigator.clipboard 는 보안 컨텍스트(https 또는 localhost)에서만 있다.
+     * 예전에는 없으면 **아무 일도 하지 않았다** — 눌러도 반응이 없으니 사람은
+     * 자기가 잘못 눌렀다고 생각한다. 옛 방법이라도 시도한다.
+     */
+    this._legacyCopy();
+  };
+
+  _legacyCopy = () => {
+    const { address } = this.props;
+    const area = document.createElement("textarea");
+    area.value = address;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    document.body.appendChild(area);
+    area.select();
+    area.setSelectionRange(0, address.length);
+    try {
+      if (document.execCommand("copy")) {
+        this._done();
+      }
+    } catch (e) {
+      /* 복사할 방법이 없다. 주소는 화면에 그대로 있으니 손으로 고를 수 있다. */
+    }
+    document.body.removeChild(area);
   };
 
   _newAddress = async () => {
@@ -197,22 +262,32 @@ class BalanceCard extends Component {
 
     return (
       <Wrap>
-        <Caption>잔액</Caption>
-        <Amount>
-          {balance === null ? "—" : formatLim(balance)}
-          <Unit>LIM</Unit>
-        </Amount>
-        {held && (
-          <Pending>
-            지금 보낼 수 있는 금액 <strong>{formatLim(spendable)} LIM</strong>
-            {immature > 0
-              ? ` · 채굴 보상 ${formatLim(immature)} LIM 은 아직 묻히는 중입니다`
-              : " · 나머지는 전송 대기 중입니다"}
-          </Pending>
-        )}
-        {!held && pending > 0 && (
-          <Pending>전송 대기 중인 트랜잭션 {pending}건</Pending>
-        )}
+        <Top>
+          <TopMain>
+            <Caption>잔액</Caption>
+            <Amount>
+              {balance === null ? "—" : formatLim(balance)}
+              <Unit>LIM</Unit>
+            </Amount>
+            {held && (
+              <Pending>
+                지금 보낼 수 있는 금액 <strong>{formatLim(spendable)} LIM</strong>
+                {immature > 0
+                  ? ` · 채굴 보상 ${formatLim(immature)} LIM 은 아직 묻히는 중입니다`
+                  : " · 나머지는 전송 대기 중입니다"}
+              </Pending>
+            )}
+            {!held && pending > 0 && (
+              <Pending>전송 대기 중인 트랜잭션 {pending}건</Pending>
+            )}
+          </TopMain>
+          {address && (
+            <QrSide>
+              <QrCode value={address} size={100} title={`받을 주소 ${address} 의 QR 코드`} />
+              <QrCaption>받을 주소</QrCaption>
+            </QrSide>
+          )}
+        </Top>
 
         <AddressRow>
           <AddressText title={address || ""}>

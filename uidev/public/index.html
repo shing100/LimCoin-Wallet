@@ -31,6 +31,27 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>LimCoin Wallet</title>
+
+    <!--
+      고른 밝기를 첫 칠 이전에 붙인다.
+
+      React 가 뜬 뒤에 붙이면, 다크가 기본인 이 창에서 라이트를 골라 둔
+      사람에게 어두운 화면이 한 번 번쩍이고 나서 밝아진다. <head> 안의
+      동기 스크립트여야 하는 이유다 — 여기서 멈춰 실행된 뒤에 <body> 가
+      그려진다. 실제 색 규칙은 src/ui.js 의 baseStyles 에 있다.
+    -->
+    <script>
+      (function () {
+        try {
+          var mode = window.localStorage.getItem("limcoin.wallet.theme");
+          if (mode === "light" || mode === "dark") {
+            document.documentElement.setAttribute("data-theme", mode);
+          }
+        } catch (e) {
+          /* 저장소가 막혀 있으면 OS 설정을 따른다 */
+        }
+      })();
+    </script>
   </head>
   <body>
     <noscript>
